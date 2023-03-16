@@ -1,0 +1,27 @@
+name: 'Autobuilder'
+description: 'Builds project based on provided inputs'
+inputs:
+  build-file:
+    description: name of file used to build the binary 
+    default: 'Makefile'
+  build-file-type:
+    description: type of file used to build the binary (e.g. shell script, Makefile)
+    default: 'Makefile'
+  directory:
+    description: directory where project is located
+    required: false
+    default: '.'
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        cd ${{ inputs.directory }}
+        if [ ${{ inputs.build-file-type }} == 'Makefile' ]; then
+          make -f ${{ inputs.build-file }}
+        else
+          chmod +x ${{ inputs.build-file }}
+          ./${{ inputs.build-file }} $ARGS
+        fi
+      shell: bash
+
+

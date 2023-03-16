@@ -1,0 +1,9 @@
+go 1.18
+
+use (
+	.
+	./cmd/new
+	./cmd/profiles
+	./cmd/stage
+	./karma
+)
