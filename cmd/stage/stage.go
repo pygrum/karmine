@@ -27,6 +27,7 @@ var (
 	serveFile = file.Command("serve", "serve a specified file")
 	deleteF   = file.Command("clear", "remove a file from the stage")
 	filename  = serveFile.Arg("filename", "name of file to stage").Required().String()
+	outfile   = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
 	cmd       = app.Command("cmd", "stage a command")
 	exec      = cmd.Command("exec", "execute a shell command on target")
 	viewCmd   = cmd.Command("view", "view current command stage")
@@ -54,7 +55,45 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err = os.WriteFile(filestage, bytes, 0644); err != nil {
+		var uuid string
+		if len(*forwho) != 0 {
+			uuid, err = datastore.GetUUIDByName(*forwho)
+			if err != nil {
+				log.Fatal(err)
+			}
+			aeskey, X1, X2 := db.GetKeysByUUID(uuid)
+			bytes, err = kes.EncryptObject(bytes, aeskey, X1, X2)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		if len(*forwho) == 0 {
+			log.Warn("'for' flag was not set, meaning file bytes are unencrypted during transit (aside from mTLS).")
+		}
+		ofile := *outfile
+		if len(*outfile) == 0 {
+			ofile = *filename
+			log.Infof("file name on remote has defaulted to %s", ofile)
+		}
+		fileObj := &models.KarObjectFile{
+			FileBytes: bytes,
+			FileName:  ofile,
+		}
+		fileObjBytes, err := json.Marshal(fileObj)
+		if err != nil {
+			log.Fatal(err)
+		}
+		genericObj := &models.GenericData{
+			CmdID:  db.GetCmdID(),
+			UUID:   uuid,
+			Type:   2,
+			Object: fileObjBytes,
+		}
+		genericObjBytes, err := json.Marshal(genericObj)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err = os.WriteFile(filestage, genericObjBytes, 0644); err != nil {
 			log.Fatal(err)
 		}
 		if err = updateStage(filestage, *filename); err != nil {
