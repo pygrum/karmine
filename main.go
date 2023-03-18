@@ -163,7 +163,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(503)
 			return
 		}
-		logResponse(cmdResponse, cmd, name, uid)
+		logResponse(cmdResponse, cmd, name, uid, r.RemoteAddr)
 		if err = db.DeleteCmdByID(genericData.CmdID); err != nil {
 			if err.Error() != "no rows affected" {
 				log.Errorf("failed to delete command with id %d: %v", genericData.CmdID, err)
@@ -171,15 +171,43 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		w.WriteHeader(503)
+	case 2:
+		var obj []byte
+		var err error
+		if len(genericData.UUID) != 0 {
+			aeskey, x1, x2 := db.GetKeysByUUID(r.Header.Get("X-UUID"))
+			obj, err = kes.DecryptObject(genericData.Object, aeskey, x1, x2)
+			if err != nil {
+				log.Error(err)
+				w.WriteHeader(503)
+				return
+			}
+		} else {
+			obj = genericData.Object
+		}
+		fileObj := &models.KarResponseObjectFile{}
+		if err := json.Unmarshal(obj, fileObj); err != nil {
+			log.Error(err)
+			w.WriteHeader(503)
+			return
+		}
+		if fileObj.Error != 0 {
+			n, err := datastore.GetNameByUUID(r.Header.Get("X-UUID"))
+			if err != nil {
+				log.Error(err)
+			}
+			fmt.Printf("%% %s %% %s ---\n", n, r.RemoteAddr)
+			log.WithField("status", "error").Error(fileObj.ErrVal)
+		}
+		w.WriteHeader(503)
 	}
 }
 
-func logResponse(resp *models.KarResponseObjectCmd, cmd, name, uid string) {
+func logResponse(resp *models.KarResponseObjectCmd, cmd, name, uid, addr string) {
 	if len(cmd) == 0 {
 		return
 	}
-	address := db.GetAddrByUUID(uid)
-	fmt.Printf("%% %s %% %s ---\n", name, address)
+	fmt.Printf("%% %s %% %s---\n", name, addr)
 	log.WithField("status", "success").Info(cmd)
 	if len(resp.Data.Error) != 0 {
 		log.WithField("status", "error").Info(resp.Data.Error)

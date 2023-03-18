@@ -11,6 +11,7 @@ AESKEY=$7 # rest are base32 encoded
 X1=$8 
 X2=$9
 UUID=${10}
+PACKER=${11}
 
 LDFLAGS=(
     "-X 'main.InitC2Endpoint=${C2}'"
@@ -21,6 +22,7 @@ LDFLAGS=(
     "-X 'main.InitAESKey=${AESKEY}'"
     "-X 'main.X1=${X1}'"
     "-X 'main.X2=${X2}'"    
+    "-X 'main.InitPFile=${PACKER}'"
 )
 
 OLDDIR=$PWD

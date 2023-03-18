@@ -104,13 +104,6 @@ func (db *Kdb) GetCmdByID(ID int) (cmd string) {
 	return
 }
 
-func (db *Kdb) GetAddrByUUID(UUID string) string {
-	row := db.DB.QueryRow("SELECT rhostname FROM karmine WHERE uuid = ?", UUID)
-	var rhost string
-	row.Scan(&rhost)
-	return rhost
-}
-
 func (db *Kdb) CreateNewInstance(UUID, aesKey, x1, x2 string) error {
 	query := "INSERT INTO karmine(uuid, aeskey, xorkey1, xorkey2) VALUES (?, ?, ?, ?)"
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)

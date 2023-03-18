@@ -24,6 +24,16 @@ type KarResponseObjectCmd struct {
 	} `json:"data"`
 }
 
+type KarObjectFile struct {
+	FileBytes []byte `json:"bytes"`
+	FileName  string `json:"filename"`
+}
+
+type KarResponseObjectFile struct {
+	Error  int    `json:"errors"`
+	ErrVal string `json:"errval"`
+}
+
 // This object is only sent during credential acquirement
 // lives only under 'data' in GenericData object
 
