@@ -22,6 +22,7 @@ import (
 var (
 	app      = kingpin.New("new", "create new karmine binary instances")
 	karmaCmd = app.Command("karma", "create a karma instance")
+	outfile  = app.Flag("outfile", "write instance to a location").String()
 	oS       = karmaCmd.Flag("os", "os to compile binary for").Required().String()
 	arch     = karmaCmd.Flag("arch", "architecture to compile binary for").Default("amd64").String()
 	waitSec  = karmaCmd.Flag("interval", "time interval between c2 callouts in seconds").Default("60").String()
@@ -116,6 +117,8 @@ func Karma(GOOS, GOARCH, C2, waitSecs string, db *datastore.Kdb) (string, error)
 		encKey1,
 		encKey2,
 		encID,
+		"",
+		*outfile,
 	)
 	var cout, cerr bytes.Buffer
 	cmd.Stderr = &cerr

