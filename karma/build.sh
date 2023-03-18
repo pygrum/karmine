@@ -32,8 +32,8 @@ if [ "${GOOS}" == "windows" ]; then
 fi
 
 if [ ! -z "$OUTFILE" ]; then
-    OUTFILE="-o ${OUTFILE}"
     LOCATION=$OUTFILE
+    OUTFILE="-o ${OUTFILE}"
 fi
 
 cd $(dirname $0)
@@ -44,5 +44,5 @@ if [ -z "$OUTFILE" ]; then
     LOCATION=$OLDDIR/bin
     mkdir -p $LOCATION
     mv karma* $LOCATION
-
+fi
 echo "'karma' instance saved at $LOCATION"
