@@ -7,7 +7,6 @@ USE karmine;
 
 CREATE TABLE IF NOT EXISTS karmine (
   uuid          VARCHAR(255) NOT NULL,
-  rhostname     VARCHAR(255),
   aeskey        VARCHAR(255), 
   xorkey1       VARCHAR(255),
   xorkey2       VARCHAR(255),
