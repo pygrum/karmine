@@ -65,7 +65,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	db, err = datastore.New("karmine")
+	db, err = datastore.New()
 	if err != nil {
 		log.Fatal(err)
 	}

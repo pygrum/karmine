@@ -8,21 +8,20 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/pygrum/karmine/config"
 )
 
 type Kdb struct {
-	DB       *sql.DB
-	Database string
+	DB *sql.DB
 }
 
-func New(database string) (*Kdb, error) {
-	username, password, err := config.GetSqlCreds()
+func New() (*Kdb, error) {
+	conf, err := config.GetFullConfig()
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("mysql", username+":"+password+"@/"+database)
+	db, err := sql.Open("sqlite3", conf.DBPath)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +32,7 @@ func New(database string) (*Kdb, error) {
 	db.SetMaxIdleConns(20)
 	db.SetMaxOpenConns(20)
 	return &Kdb{
-		DB:       db,
-		Database: database,
+		DB: db,
 	}, nil
 }
 

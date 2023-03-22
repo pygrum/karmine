@@ -32,7 +32,7 @@ var (
 
 func main() {
 	var id string
-	db, err := datastore.New("karmine")
+	db, err := datastore.New()
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -8,20 +8,7 @@ Karmine is a monorepo which will contain several security-related projects in a 
 
 ## Setup 
 
-1. Run `install.sh` in the project root. This will set up configuration files, the `bin`, and an x509 certificate-key pair. You can replace these with your own by replacing the ones in `~/.kdots/` with files of the same name.
-
-2. Install and start mysql-server. For example, the command to do so on ubuntu is:
-
-```
-sudo apt install mysql-server
-sudo service mysql start
-```
-
-3. Run the sql initialisation script.
-
-```
-mysql -u root -h localhost < init.sql
-```
+1. Run `install.sh` in the project root. This will set up configuration files, the `bin`, a x509 certificate-key pair, and a database. You can replace these with your own by replacing the ones in `~/.kdots/` with files of the same name.
 
 ## Usage 
 

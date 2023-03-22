@@ -8,11 +8,10 @@ import (
 type configData struct {
 	BinPath      string    `json:"bin_path"`
 	SrcPath      string    `json:"src_path"`
-	SqlUser      string    `json:"sql_user"`
-	SqlPass      string    `json:"sql_pass"`
 	CertFilePath string    `json:"cert_pem"`
 	KeyFilePath  string    `json:"key_pem"`
 	Endpoint     string    `json:"endpoint"`
+	DBPath       string    `json:"db"`
 	Hosts        []Profile `json:"hosts"`
 	Stages       Stages    `json:"stages"`
 }
@@ -32,18 +31,6 @@ func ConfigPath() string {
 	path, _ := os.UserHomeDir()
 	path += "/.konfig"
 	return path
-}
-
-func GetSqlCreds() (string, string, error) {
-	bytes, err := os.ReadFile(ConfigPath())
-	if err != nil {
-		return "", "", err
-	}
-	config := &configData{}
-	if err = json.Unmarshal(bytes, config); err != nil {
-		return "", "", err
-	}
-	return config.SqlUser, config.SqlPass, nil
 }
 
 func GetBinPath() (string, error) {
