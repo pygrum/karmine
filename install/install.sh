@@ -18,6 +18,7 @@ CONFIG_LINES=(
     "\"cert_pem\":\"${HOME}/.kdots/karmine.crt\","
     "\"key_pem\":\"${HOME}/.kdots/karmine.key\","
     "\"db\":\"${HOME}/.kdots/karmine.db\","
+    "\"ssldomain\":\"${1}\","
     "\"endpoint\":\"/api\""
     "}"
 )

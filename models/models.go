@@ -32,6 +32,7 @@ type KarObjectFile struct {
 type KarResponseObjectFile struct {
 	Error  int    `json:"errors"`
 	ErrVal string `json:"errval"`
+	RetVal string `json:"retval"`
 }
 
 // This object is only sent during credential acquirement

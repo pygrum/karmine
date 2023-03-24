@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/alecthomas/kingpin"
@@ -34,6 +35,7 @@ var (
 	deleteC   = cmd.Command("clear", "remove a command from the stage")
 	cmdstring = exec.Arg("command", "command to execute").Required().String()
 	forwho    = app.Flag("for", "name of target to receive command").String()
+	unsafe    = serveFile.Flag("unsafe", "allows un-encrypted files to be written to disk remotely").Bool()
 )
 
 func main() {
@@ -67,12 +69,15 @@ func main() {
 				log.Fatal(err)
 			}
 		}
-		if len(*forwho) == 0 {
-			log.Warn("'for' flag was not set, meaning file bytes are unencrypted during transit (aside from mTLS).")
+		if len(*forwho) == 0 && !*unsafe {
+			log.Fatal("'for' flag was not set, meaning file will be unencrypted on disk. set --unsafe to allow.")
+		}
+		if len(*forwho) == 0 && *unsafe {
+			log.Warn("'for' flag was not set, meaning file will be unencrypted on disk.")
 		}
 		ofile := *outfile
 		if len(*outfile) == 0 {
-			ofile = *filename
+			ofile = filepath.Base(*filename)
 			log.Infof("file name on remote has defaulted to %s", ofile)
 		}
 		fileObj := &models.KarObjectFile{
@@ -131,7 +136,7 @@ func handleExec(db *datastore.Kdb) {
 		}
 	}
 	rawCmd := strings.Join(os.Args[index:], " ")
-	if err = db.AddCmdToStack(*forwho, rawCmd); err != nil {
+	if err = db.AddCmdToStack(rawCmd); err != nil {
 		log.Fatal(err)
 	}
 	if db.GetCmdID() == -1 {

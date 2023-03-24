@@ -12,6 +12,7 @@ type configData struct {
 	KeyFilePath  string    `json:"key_pem"`
 	Endpoint     string    `json:"endpoint"`
 	DBPath       string    `json:"db"`
+	SslDomain    string    `json:"ssl_domain"`
 	Hosts        []Profile `json:"hosts"`
 	Stages       Stages    `json:"stages"`
 }

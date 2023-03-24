@@ -8,6 +8,7 @@ CREATE TABLE karmine (
 
 CREATE TABLE kreds (
   id integer primary key AUTOINCREMENT,
+  uuid      VARCHAR(255),
   platform  VARCHAR(255),
   site_url  VARCHAR(255),
   uname     VARCHAR(255),

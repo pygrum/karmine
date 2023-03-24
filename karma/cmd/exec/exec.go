@@ -1,4 +1,3 @@
-// Function code: 1
 package exec
 
 import (
