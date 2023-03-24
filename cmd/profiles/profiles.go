@@ -15,11 +15,11 @@ var (
 	app    = kingpin.New("profiles", "view malware profiles")
 	view   = app.Command("view", "view all profiles")
 	remove = app.Command("remove", "remove a profile")
-	name   = remove.Arg("name", "name(s, comma separated) of profile(s) to remove").Required().String()
+	name   = remove.Arg("name", "name(s, comma separated) of profile(s) to remove, or 'all' to remove all").Required().String()
 )
 
 func main() {
-	db, err := datastore.New("karmine")
+	db, err := datastore.New()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -41,6 +41,18 @@ func main() {
 			fmt.Println(p.UUID, "|", p.Name, "|", p.Strain)
 		}
 	case remove.FullCommand():
+		if *name == "all" {
+			conf, err := config.GetFullConfig()
+			if err != nil {
+				log.Fatal(err)
+			}
+			for _, h := range conf.Hosts {
+				if err = db.RemoveProfile(h.Name); err != nil {
+					log.Error(err)
+				}
+			}
+			return
+		}
 		for _, t := range strings.Split(*name, ",") {
 			if err = db.RemoveProfile(t); err != nil {
 				log.Error(err)

