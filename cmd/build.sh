@@ -7,15 +7,13 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
 cd $SCRIPTPATH
 
-if [ ! -d "../../kbin" ]; then
-    mkdir "../../kbin"
-fi
+[ ! -d "../kbin" ] && mkdir "../kbin"
 
 for i in $(ls); do
     if [ ! -f $i ]; then
         cd $i && 
         go build && 
-        mv $i ../../kbin && cd ..;
+        mv $i ../../kbin/; cd ..;
     fi
 done
 
@@ -23,4 +21,4 @@ if [ -d "${HOME}/.kbin" ]; then
     rm -rf "${HOME}/.kbin"
 fi
 
-mv "../../kbin" ${HOME}/.kbin
+mv "../kbin" ${HOME}/.kbin
