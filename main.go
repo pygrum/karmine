@@ -139,16 +139,12 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	var obj []byte
 	var err error
 	remoteUUID := r.Header.Get("X-UUID")
-	if len(genericData.UUID) != 0 {
-		aeskey, x1, x2 := db.GetKeysByUUID(remoteUUID)
-		obj, err = kes.DecryptObject(genericData.Object, aeskey, x1, x2)
-		if err != nil {
-			log.Error(err)
-			w.WriteHeader(503)
-			return
-		}
-	} else {
-		obj = genericData.Object
+	aeskey, x1, x2 := db.GetKeysByUUID(remoteUUID)
+	obj, err = kes.DecryptObject(genericData.Object, aeskey, x1, x2)
+	if err != nil {
+		log.Error(err)
+		w.WriteHeader(503)
+		return
 	}
 	switch genericData.Type {
 	case 1:
@@ -166,6 +162,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 		}
 		if cmdResponse.Code == 1 {
 			log.Error(fmt.Errorf("$%s$: error executing '%s'", name, cmd))
+			log.Error(cmdResponse.Data.Error)
 			w.WriteHeader(503)
 			return
 		}
@@ -214,21 +211,22 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, f := range *files {
-			path := filepath.Join(name, filepath.Base(f.FileName))
+			wrName := filepath.Base(f.FileName)
+			path := filepath.Join(name, wrName)
 			if err := os.WriteFile(path, f.FileBytes, 0644); err != nil {
 				log.Error(err)
 				w.WriteHeader(503)
 				return
 			}
-			cmd := db.GetCmdByID(genericData.CmdID)
-			s := fmt.Sprintf("\n%s | %s\n", name, r.RemoteAddr)
-			brk := strings.Repeat("-", len(s))
-			fmt.Println("\n" + brk)
-			fmt.Println(s)
-			log.WithField("status", "success").Info(cmd)
-			log.Infof("Received %d files from %s. Written to %s/ directory", len(*files), name, name)
-			fmt.Println(brk)
 		}
+		cmd := db.GetCmdByID(genericData.CmdID)
+		s := fmt.Sprintf("\n%s | %s\n", name, r.RemoteAddr)
+		brk := strings.Repeat("-", len(s))
+		fmt.Println("\n" + brk)
+		fmt.Println(s)
+		log.WithField("status", "success").Info(cmd)
+		log.Infof("Received %d files from %s. Written to %s/ directory", len(*files), name, name)
+		fmt.Println("\n" + brk)
 	}
 	w.WriteHeader(503)
 }
