@@ -34,6 +34,30 @@ func NewMTLSClient(certFile, pemFile string) (*http.Client, error) {
 	}, nil
 }
 
+func TLSDialConfig(certdata, keydata, x1, x2 string) (*tls.Config, error) {
+	cbytes, err := kryptor.Decrypt(certdata, x1, x2)
+	if err != nil {
+		return nil, err
+	}
+	kbytes, err := kryptor.Decrypt(keydata, x1, x2)
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := tls.X509KeyPair(cbytes, kbytes)
+	if err != nil {
+		return nil, err
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(cbytes)
+
+	return &tls.Config{
+		InsecureSkipVerify: true, // testing
+		RootCAs:            caCertPool,
+		Certificates:       []tls.Certificate{cert},
+	}, nil
+}
+
 func MTLsClientByKryptor(certdata, keydata, x1, x2 string) (*http.Client, error) {
 	cbytes, err := kryptor.Decrypt(certdata, x1, x2)
 	if err != nil {

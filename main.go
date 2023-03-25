@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -40,6 +41,7 @@ var (
 )
 
 func main() {
+	fmt.Print("\033[H\033[2J")
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 	if net.ParseIP(*host) == nil && *host != "localhost" {
 		log.Fatalf("%s is not valid - provide a valid IP address or localhost", *host)
@@ -68,6 +70,7 @@ func main() {
 	srv.Handler = r
 	srv.Addr = *host + ":" + *port
 	fmt.Println(asciiTitle)
+	fmt.Printf("\n")
 	kl, err := kmdline.Kmdline("$ ")
 	if err != nil {
 		log.Fatal(err)
@@ -161,7 +164,11 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 			log.Error(err)
 		}
 		if cmdResponse.Code == 1 {
-			log.Error(fmt.Errorf("$%s$: error executing '%s'", name, cmd))
+			if cmdResponse.Data.Error == io.EOF.Error() {
+				w.WriteHeader(503)
+				return
+			}
+			log.Error(fmt.Errorf("%s: error executing '%s'", name, cmd))
 			log.Error(cmdResponse.Data.Error)
 			w.WriteHeader(503)
 			return
