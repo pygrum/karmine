@@ -26,16 +26,18 @@ var (
 	file      = app.Command("file", "stage a file")
 	viewFile  = file.Command("view", "view current file stage")
 	serveFile = file.Command("serve", "serve a specified file")
+	encrypt   = serveFile.Flag("encrypt", "file will be written to disk encrypted, ideal if there is a packer on disk").Bool()
 	deleteF   = file.Command("clear", "remove a file from the stage")
 	filename  = serveFile.Arg("filename", "name of file to stage").Required().String()
 	outfile   = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
 	cmd       = app.Command("cmd", "stage a command")
 	exec      = cmd.Command("exec", "execute a shell command on target")
+	get       = cmd.Command("get", "get file(s) from a remote system")
 	viewCmd   = cmd.Command("view", "view current command stage")
 	deleteC   = cmd.Command("clear", "remove a command from the stage")
 	cmdstring = exec.Arg("command", "command to execute").Required().String()
+	files     = get.Arg("files", "array of files to fetch remotely, comma-separated").Required().String()
 	forwho    = app.Flag("for", "name of target to receive command").String()
-	unsafe    = serveFile.Flag("unsafe", "allows un-encrypted files to be written to disk remotely").Bool()
 )
 
 func main() {
@@ -44,6 +46,7 @@ func main() {
 		log.Fatal(err)
 	}
 	cmdMap["exec"] = 1
+	cmdMap["get"] = 3
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case viewFile.FullCommand():
 		content, err := datastore.ShowStage(filestage)
@@ -53,59 +56,11 @@ func main() {
 		fmt.Println(content)
 		return
 	case serveFile.FullCommand():
-		bytes, err := os.ReadFile(*filename)
-		if err != nil {
-			log.Fatal(err)
-		}
-		var uuid string
-		if len(*forwho) != 0 {
-			uuid, err = datastore.GetUUIDByName(*forwho)
-			if err != nil {
-				log.Fatal(err)
-			}
-			aeskey, X1, X2 := db.GetKeysByUUID(uuid)
-			bytes, err = kes.EncryptObject(bytes, aeskey, X1, X2)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-		if len(*forwho) == 0 && !*unsafe {
-			log.Fatal("'for' flag was not set, meaning file will be unencrypted on disk. set --unsafe to allow.")
-		}
-		if len(*forwho) == 0 && *unsafe {
-			log.Warn("'for' flag was not set, meaning file will be unencrypted on disk.")
-		}
-		ofile := *outfile
-		if len(*outfile) == 0 {
-			ofile = filepath.Base(*filename)
-			log.Infof("file name on remote has defaulted to %s", ofile)
-		}
-		fileObj := &models.KarObjectFile{
-			FileBytes: bytes,
-			FileName:  ofile,
-		}
-		fileObjBytes, err := json.Marshal(fileObj)
-		if err != nil {
-			log.Fatal(err)
-		}
-		genericObj := &models.GenericData{
-			CmdID:  db.GetCmdID(),
-			UUID:   uuid,
-			Type:   2,
-			Object: fileObjBytes,
-		}
-		genericObjBytes, err := json.Marshal(genericObj)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err = os.WriteFile(filestage, genericObjBytes, 0644); err != nil {
-			log.Fatal(err)
-		}
-		if err = updateStage(filestage, *filename); err != nil {
-			log.Fatal(err)
-		}
+		handleServe(db)
 	case exec.FullCommand():
-		handleExec(db)
+		handleCmd(db, "exec")
+	case get.FullCommand():
+		handleCmd(db, "get")
 	case viewCmd.FullCommand():
 		content, err := datastore.ShowStage(cmdstage)
 		if err != nil {
@@ -120,18 +75,104 @@ func main() {
 	}
 }
 
-func handleExec(db *datastore.Kdb) {
-	cmdlet := cmdMap["exec"]
+func handleServe(db *datastore.Kdb) {
+	bytes, err := os.ReadFile(*filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var uuid string
+	if !*encrypt {
+		log.Warn("'encrypt' flag was not set, meaning file will be unencrypted on disk.")
+	}
+	if *encrypt && len(*forwho) == 0 {
+		log.Fatal("'for' flag must be provided in order to encrypt the file with the profile's aeskey")
+	}
+	if len(*forwho) != 0 {
+		// if not broadcast, encrypt the file object
+		uuid, err = datastore.GetUUIDByName(*forwho)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// encrypt the file bytes if --encrypt is set
+		if *encrypt {
+			aeskey, X1, X2 := db.GetKeysByUUID(uuid)
+			bytes, err = kes.EncryptObject(bytes, aeskey, X1, X2)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+	index := 0
+	for i, n := range os.Args {
+		if n == "serve" {
+			index = i
+		}
+	}
+	rawCmd := strings.Join(os.Args[index:], " ")
+	if err = db.AddCmdToStack(rawCmd); err != nil {
+		log.Fatal(err)
+	}
+	ofile := *outfile
+	if len(*outfile) == 0 {
+		ofile = filepath.Base(*filename)
+		log.Infof("file name on remote has defaulted to %s", ofile)
+	}
+	fileObj := &models.KarObjectFile{
+		FileBytes: bytes,
+		FileName:  ofile,
+	}
+	fileObjBytes, err := json.Marshal(fileObj)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if len(*forwho) == 0 {
+		// if broadcast, warn that file object isn't encrypted
+		log.Warnf("'for' not set, file object will not be aes-encrypted on transit")
+	} else {
+		// if not broadcast, encrypt the file object
+		aeskey, X1, X2 := db.GetKeysByUUID(uuid)
+		fileObjBytes, err = kes.EncryptObject(fileObjBytes, aeskey, X1, X2)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	genericObj := &models.GenericData{
+		CmdID:  db.GetCmdID(),
+		UUID:   uuid,
+		Type:   2,
+		Object: fileObjBytes,
+	}
+	genericObjBytes, err := json.Marshal(genericObj)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err = os.WriteFile(filestage, genericObjBytes, 0644); err != nil {
+		log.Fatal(err)
+	}
+	if err = updateStage(filestage, *filename); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func handleCmd(db *datastore.Kdb, myCmd string) {
+	cmdlet := cmdMap[myCmd]
 	cmdObj := &models.KarObjectCmd{}
 	cmdObj.Cmd = cmdlet
-	cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *cmdstring})
+	if len(*cmdstring) != 0 {
+		cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *cmdstring})
+	}
+	if len(*files) != 0 {
+		for _, f := range strings.Split(*files, ",") {
+			cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: f})
+		}
+	}
 	bytes, err := json.Marshal(cmdObj)
 	if err != nil {
 		log.Fatal(err)
 	}
 	index := 0
 	for i, n := range os.Args {
-		if n == "exec" {
+		if n == myCmd {
 			index = i
 		}
 	}
@@ -142,15 +183,21 @@ func handleExec(db *datastore.Kdb) {
 	if db.GetCmdID() == -1 {
 		log.Fatal("error getting latest command id")
 	}
-	uuid, err := datastore.GetUUIDByName(*forwho)
 	var encObj []byte
-	if err != nil || len(uuid) == 0 {
+	var uuid string
+	if len(*forwho) == 0 {
+		log.Warnf("'for' not set, command will not be aes-encrypted on transit")
 		encObj = bytes
 	} else {
-		aeskey, x1, x2 := db.GetKeysByUUID(uuid)
-		encObj, err = kes.EncryptObject(bytes, aeskey, x1, x2)
-		if err != nil {
-			log.Fatal(err)
+		uuid, err = datastore.GetUUIDByName(*forwho)
+		if err != nil || len(uuid) == 0 {
+			log.Fatalf("error: profile %s does not exist in the database", *forwho)
+		} else {
+			aeskey, x1, x2 := db.GetKeysByUUID(uuid)
+			encObj, err = kes.EncryptObject(bytes, aeskey, x1, x2)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 	genericObj := models.GenericData{

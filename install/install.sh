@@ -54,10 +54,6 @@ then
     cp karmine.db ${HOME}/.kdots
 fi
 
-if [ -d "${HOME}/.kbin" ]
-then
-    rm -rf ${HOME}/.kbin
-fi
-cp -r kbin ${HOME}/.kbin
+./cmd/build.sh
 
 echo "Build complete"

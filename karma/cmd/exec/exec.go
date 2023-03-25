@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/pygrum/karmine/models"
 )
@@ -19,6 +20,7 @@ func Do(respObj *models.KarResponseObjectCmd, args ...models.MultiType) error {
 	}
 	app, appArgs := fullCmd[0], fullCmd[1:]
 	cmd := exec.Command(app, appArgs...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 	err := cmd.Run()
