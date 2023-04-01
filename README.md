@@ -1,10 +1,6 @@
 # Karmine
 
-Karmine is a monorepo which will contain several security-related projects in a mix of languages, mainly:
-- Go
-- C / C++
-- Python
-- Rust
+Karmine is a C2 server written in Go. It handles requests from a bot/backdoor ('Karma'), which has built-in dropping, exfiltration and anti-analysis / sandboxing features. All communication happens over mTLS, with transferred objects AES-encrypted to avoid detection. Karma instances are run using a loader, 'Karl', which reads encrypted PEs written to disk, decrypts and runs them in memory.
 
 ## Setup 
 
@@ -26,7 +22,7 @@ uuid                                 | name         | strain
 181d70e4-cbc6-4bfd-9e96-7ccb31dbbc27 | 3a89aee34882 | karma
 
 $  stage cmd --for 3a89aee34882 exec "powershell -c whoami /priv"
-$  % 3a89aee34882 %  ---
+$  % 3a89aee34882 %  127.0.0.1:1337 ---
 INFO[1139] exec powershell -c whoami /priv               type=cmd
 INFO[1139] 
 PRIVILEGES INFORMATION
