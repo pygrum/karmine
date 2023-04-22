@@ -1,5 +1,7 @@
 #include <Windows.h>
 
+#define length(array) ((sizeof(array)) / (sizeof(array[0])))
+
 BOOL APIENTRY DllMain(
     HINSTANCE hinstDLL,  // handle to DLL module
     DWORD fdwReason,     // reason for calling function
@@ -9,18 +11,8 @@ BOOL APIENTRY DllMain(
     switch( fdwReason ) 
     { 
         case DLL_PROCESS_ATTACH:
-
-            //STARTUPINFOA info = { sizeof(info) };
-            //PROCESS_INFORMATION processInfo;
-            //if (CreateProcessA((LPCSTR)"main.exe", NULL, NULL, NULL, TRUE, 0, NULL, NULL, &info, &processInfo))
-            //{
-            //    WaitForSingleObject(processInfo.hProcess, INFINITE);
-            //    CloseHandle(processInfo.hProcess);
-            //    CloseHandle(processInfo.hThread);
-            //}
-
-            // Begin injection of remote PE into memory
-            break;
+        // With elevated privileges, add folder to Defender exclude path
+        // then execute Karl instance
     }
     return TRUE;  // Successful DLL_PROCESS_ATTACH.
 }

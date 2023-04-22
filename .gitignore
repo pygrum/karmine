@@ -1,2 +1,5 @@
 karmine
 bin
+*.vscode*
+*.vs*
+karl/testarea

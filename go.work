@@ -2,8 +2,10 @@ go 1.18
 
 use (
 	.
+	./cmd/krypto
 	./cmd/new
 	./cmd/profiles
 	./cmd/stage
+	./karl
 	./karma
 )
