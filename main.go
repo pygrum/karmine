@@ -226,7 +226,12 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		cmd := db.GetCmdByID(genericData.CmdID)
+		var cmd string
+		if genericData.CmdID == -1 {
+			cmd = "revshell 'get' command"
+		} else {
+			cmd = db.GetCmdByID(genericData.CmdID)
+		}
 		s := fmt.Sprintf("\n%s | %s\n", name, r.RemoteAddr)
 		brk := strings.Repeat("-", len(s))
 		fmt.Println("\n" + brk)

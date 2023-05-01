@@ -58,6 +58,7 @@ func GetFullConfig() (*configData, error) {
 	return config, nil
 }
 
+// Returns the absolute paths of the ssl key pair files, which are stored in the configuration file.
 func GetSSLPair() (string, string, error) {
 	bytes, err := os.ReadFile(ConfigPath())
 	if err != nil {
