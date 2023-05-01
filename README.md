@@ -1,6 +1,19 @@
 # Karmine
 
-Karmine is a C2 server written in Go. It handles requests from a bot/backdoor ('Karma'), which has built-in dropping, exfiltration and anti-analysis / sandboxing features. All communication happens over mTLS, with transferred objects AES-encrypted to avoid detection. Karma instances are run using a loader, 'Karl', which reads encrypted PEs written to disk, decrypts and runs them in memory.
+Karmine is a C2 server written in Go. It handles requests from a bot/backdoor ('Karma'), which has built-in dropping, exfiltration and anti-analysis / sandboxing features. All communication happens over mTLS, with transferred objects AES-encrypted to avoid detection. Karma instances are run entirely in memory via [Process Injection](https://github.com/pygrum/karmine/karl/runpe/README.md).
+
+## Why?
+
+I built this as part of independent research into malware detection evasion techniques. Some of the simpler techniques are included in the beacon ('Karma') of this project:
+- Fileless execution: the final payload is embedded as an encrypted buffer into another program. It is then decrypted and injected into another process
+- DLL sideloading: the custom DLL included in this project leverages a DLL sideloading 'vulnerability' in the trusted file `bthudtask.exe`, which auto-elevates to Admin. The DLL subsequently adds the 
+current folder to the Windows Defender exclusion path, disables the cleaning of the temp folder, and creates a scheduled task for the payload to run each time the device restarts.
+- As of release v0.1.0, there are no anti-analysis / sandboxing techniques built in.
+
+## Use cases
+
+This project is versatile; with potential for use within CTFs, as well as real life testing situations, due to it's enhanced evasion abilities.
+I do NOT condone and will NOT be responsible for the use of this software for malicious purposes. This software is intended for educational + legal use only.
 
 ## Setup 
 
@@ -45,13 +58,10 @@ The Karmine database logs all staged commands, active strains, and credentials f
 
 ### Commands
 
-As of March 15 2023, there are 3 commands:
+As of March 15 2023, there are 4 commands:
 - `new`
 - `profiles`
 - `stage`
+- `deploy`
 
 To get usage info about these commands, type `<command> --help`
-
-## Karma
-
-Karma is a bot with backdoor functionality, capable of executing shell commands, and injecting remote binaries into legitimate system processes. It communicates over a secure mTLS connection, and supports threaded processing and execution of commands. 
