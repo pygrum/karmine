@@ -1,6 +1,6 @@
 # Karmine
 
-Karmine is a C2 server written in Go. It handles requests from a bot/backdoor ('Karma'), which has built-in dropping, exfiltration and anti-analysis / sandboxing features. All communication happens over mTLS, with transferred objects AES-encrypted to avoid detection. Karma instances are run entirely in memory via [Process Injection](https://github.com/pygrum/karmine/karl/runpe/README.md).
+Karmine is a C2 server written in Go. It handles requests from a bot/backdoor ('Karma'), which has built-in dropping, exfiltration and AV evasion features. All communication happens over mTLS, with transferred objects AES-encrypted to avoid detection. Karma instances are run entirely in memory via [Process Injection](https://github.com/pygrum/karmine/tree/main/karl/runpe).
 
 ## Why?
 
