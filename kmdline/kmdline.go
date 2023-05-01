@@ -55,10 +55,10 @@ func (kl *kmdline) Read() error {
 	if err != nil {
 		return err
 	}
-	cmdArr := []string{"new", "profiles", "stage"}
 	cmdMap["new"] = binPath + "/new"
 	cmdMap["profiles"] = binPath + "/profiles"
 	cmdMap["stage"] = binPath + "/stage"
+	cmdMap["deploy"] = binPath + "/deploy"
 
 	for {
 		line, err := l.Readline()
@@ -98,11 +98,11 @@ func (kl *kmdline) Read() error {
 			fmt.Println("================")
 			fmt.Println("custom commands")
 			fmt.Println("================")
-			for _, c := range cmdArr {
+			for c := range cmdMap {
 				fmt.Println(c)
 			}
 			fmt.Println("================")
-			fmt.Println("run any to view usage")
+			fmt.Println("run any with '--help' to view usage")
 			fmt.Println()
 			continue
 		}
@@ -110,25 +110,17 @@ func (kl *kmdline) Read() error {
 		if !ok {
 			c = tokens[0]
 		}
-		var cout, cerr bytes.Buffer
-
 		cmd := exec.Command(c, tokens[1:]...)
-		cmd.Stdout = &cout
-		cmd.Stderr = &cerr
+		var buf bytes.Buffer
+		mw := io.MultiWriter(os.Stdout, &buf)
+
+		cmd.Stdout = mw
+		cmd.Stderr = mw
 		if err = cmd.Run(); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				fmt.Println(tokens[0]+":", "command not found")
 			}
-			if len(cerr.String()) != 0 {
-				fmt.Println(cerr.String())
-			}
 			continue
-		}
-		if len(cerr.String()) != 0 {
-			fmt.Println(cerr.String())
-		}
-		if len(cout.String()) != 0 {
-			fmt.Println(cout.String())
 		}
 	}
 	return nil

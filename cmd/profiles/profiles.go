@@ -32,13 +32,11 @@ func main() {
 		fmt.Printf("\n")
 		str := fmt.Sprintf("%-36s | %-12s | %s", "uuid", "name", "strain")
 		fmt.Println(str)
-		fmt.Println(strings.Repeat("-", len(str)))
+		fmt.Println(strings.Repeat("=", len(str)))
 		for _, p := range conf.Hosts {
-			if len(p.Name) == 0 {
-				fmt.Println(p.UUID)
-				continue
-			}
-			fmt.Println(p.UUID, "|", p.Name, "|", p.Strain)
+			entry := fmt.Sprintf("%-36s | %-12s | %s", p.UUID, p.Name, p.Strain)
+			fmt.Println(entry)
+			fmt.Println(strings.Repeat("-", len(str)))
 		}
 	case remove.FullCommand():
 		if *name == "all" {

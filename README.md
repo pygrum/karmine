@@ -4,14 +4,19 @@ Karmine is a C2 server written in Go. It handles requests from a bot/backdoor ('
 
 ## Setup 
 
-1. Run `install.sh` in the project root. This will set up configuration files, the `bin`, a x509 certificate-key pair, and a database. You can replace these with your own by replacing the ones in `~/.kdots/` with files of the same name.
+Run `install.sh` in the project root. This will set up configuration files, the `bin`, a x509 certificate-key pair, and a database. You can replace these with your own by replacing the ones in `~/.kdots/` with files of the same name. 
+The project depends on ncat for you to set up a listener using the SSL keys in your configuration folder. The ncat command to do so printed to the terminal after a reverse shell is requested, so you can paste and run it in a separate terminal window.
+
+### Dependencies
+
+- `ncat`
 
 ## Usage 
 
 ### Example
 
 ```
-$  new karma --os windows --interval 3
+$  new karma --interval 3
 'karma' saved to /home/pygrum/karmine/bin
 
 
@@ -49,4 +54,4 @@ To get usage info about these commands, type `<command> --help`
 
 ## Karma
 
-Karma is a bot with backdoor functionality, capable of executing shell commands, stealing chrome passwords, and injecting remote binaries into legitimate system processes. It communicates over a secure mTLS connection, and supports threaded processing and execution of commands. 
+Karma is a bot with backdoor functionality, capable of executing shell commands, and injecting remote binaries into legitimate system processes. It communicates over a secure mTLS connection, and supports threaded processing and execution of commands. 

