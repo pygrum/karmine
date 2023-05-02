@@ -53,8 +53,9 @@ type CredObj struct {
 
 // a struct capable of holding multiple types of data. Used when the response type for requested data is unknown.
 type MultiType struct {
-	IntValue int    `json:"int"`
-	StrValue string `json:"string"`
+	IntValue  int    `json:"int"`
+	StrValue  string `json:"string"`
+	ByteValue []byte `json:"byte_arr"`
 }
 
 type Error struct {

