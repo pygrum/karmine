@@ -32,11 +32,11 @@ const (
 
 // Inject starts the src process and injects the target process.
 // destBuf can be passed into the function to inject a file already in memory.
-func Inject(srcPath, destPath string, destBuf []byte) {
+func Inject(srcPath, destPath string, destBuf []byte) error {
 
 	cmd, err := syscall.UTF16PtrFromString(srcPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	si := new(syscall.StartupInfo)
@@ -45,7 +45,7 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 	// CREATE_SUSPENDED := 0x00000004
 	err = syscall.CreateProcess(cmd, nil, nil, nil, false, 0x00000004, nil, nil, si, pi)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	hProcess := uintptr(pi.Process)
@@ -53,7 +53,7 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 
 	ctx, err := GetThreadContext(hThread)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	// https://stackoverflow.com/questions/37656523/declaring-context-struct-for-pinvoke-windows-x64
 	Rdx := binary.LittleEndian.Uint64(ctx[136:])
@@ -61,7 +61,7 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 	//https://bytepointer.com/resources/tebpeb64.htm
 	baseAddr, err := ReadProcessMemoryAsAddr(hProcess, uintptr(Rdx+16))
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	// assigning destination PE to passed byte array unless destination process path is also supplied
@@ -69,27 +69,27 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 	if len(destPath) != 0 {
 		destPE, err = os.ReadFile(destPath)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
 
 	destPEReader := bytes.NewReader(destPE)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	f, err := pe.NewFile(destPEReader)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	oh, ok := f.OptionalHeader.(*pe.OptionalHeader64)
 	if !ok {
-		panic("OptionalHeader64 not found")
+		return fmt.Errorf("OpionalHeader64 not found")
 	}
 
 	if err := NtUnmapViewOfSection(hProcess, baseAddr); err != nil {
-		panic(err)
+		return err
 	}
 
 	// MEM_COMMIT := 0x00001000
@@ -97,21 +97,21 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 	// PAGE_EXECUTE_READWRITE := 0x40
 	newImageBase, err := VirtualAllocEx(hProcess, baseAddr, oh.SizeOfImage, 0x00002000|0x00001000, 0x40)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	err = WriteProcessMemory(hProcess, newImageBase, destPE, oh.SizeOfHeaders)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	for _, sec := range f.Sections {
 		secData, err := sec.Data()
 		if err != nil {
-			panic(err)
+			return err
 		}
 		err = WriteProcessMemory(hProcess, newImageBase+uintptr(sec.VirtualAddress), secData, sec.Size)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
 	delta := int64(oh.ImageBase) - int64(newImageBase)
@@ -121,12 +121,12 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 
 		relSec := findRelocSec(rel.VirtualAddress, f.Sections)
 		if relSec == nil {
-			panic(fmt.Sprintf(".reloc not found at %x", rel.VirtualAddress))
+			return fmt.Errorf(".reloc not found at %x", rel.VirtualAddress)
 		}
 		var read uint32
 		d, err := relSec.Data()
 		if err != nil {
-			panic(err)
+			return err
 		}
 		rr := bytes.NewReader(d)
 		for read < rel.Size {
@@ -143,36 +143,35 @@ func Inject(srcPath, destPath string, destBuf []byte) {
 					rell := newImageBase + uintptr(rrr.Offset()) + uintptr(dd.VirtualAddress)
 					raddr, err := ReadProcessMemoryAsAddr(hProcess, rell)
 					if err != nil {
-						panic(err)
+						return err
 					}
 
 					err = WriteProcessMemoryAsAddr(hProcess, rell, uintptr(int64(raddr)+delta))
 					if err != nil {
-						panic(err)
+						return err
 					}
 				}
 			}
 		}
-
 	}
 	addrB := make([]byte, 8)
 	binary.LittleEndian.PutUint64(addrB, uint64(newImageBase))
 	err = WriteProcessMemory(hProcess, uintptr(Rdx+16), addrB, 8)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	binary.LittleEndian.PutUint64(ctx[128:], uint64(newImageBase)+uint64(oh.AddressOfEntryPoint))
 	err = SetThreadContext(hThread, ctx)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	_, err = ResumeThread(hThread)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
+	return nil
 }
 
 var (
