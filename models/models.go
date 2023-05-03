@@ -35,27 +35,12 @@ type KarResponseObjectFile struct {
 	RetVal string `json:"retval"`
 }
 
-// This object is only sent during credential acquirement
-// lives only under 'data' in GenericData object
-
-type KarObjectCred struct {
-	Platform string  `json:"platform"`
-	Creds    CredObj `json:"creds"`
-}
-
-type CredObj struct {
-	Url      string `json:"url"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
 // Custom command argument. Lives under KarObjectCmd, received from Karmine C2
 
 // a struct capable of holding multiple types of data. Used when the response type for requested data is unknown.
 type MultiType struct {
-	IntValue  int    `json:"int"`
-	StrValue  string `json:"string"`
-	ByteValue []byte `json:"byte_arr"`
+	IntValue int    `json:"int"`
+	StrValue string `json:"string"`
 }
 
 type Error struct {

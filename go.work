@@ -8,6 +8,5 @@ use (
 	./cmd/profiles
 	./cmd/stage
 	./karl
-	./karl-portable
 	./karma
 )

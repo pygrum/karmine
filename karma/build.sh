@@ -45,14 +45,8 @@ if [ ! -z "$OUTFILE" ]; then
     OUTFILE="-o $OUTFILE"
 fi
 
-cd $(dirname $0)/../karl-portable
-GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS_KARL[*]}" -o karl_port.exe
-
-mv karl_port.exe $(dirname $0)
 cd $(dirname $0)
-
 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS_KARMA[*]}" -o karma.exe
-rm karl_port.exe
 
 mv karma.exe ../karl && cd ../karl
 
