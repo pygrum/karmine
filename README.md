@@ -10,6 +10,20 @@ I built this as part of independent research into malware detection evasion tech
 current folder to the Windows Defender exclusion path, disables the cleaning of the temp folder, and creates a scheduled task for the payload to run each time the device restarts.
 - As of release v0.1.0, there are no anti-analysis / sandboxing techniques built in.
 
+## Features
+
+- Instance profile tracking using JSON config files
+- Encryption key and command storage using SQLite DB
+- 2 methods of deployment - standard PE, or stealthy PE executed in memory
+- mTLS encrypted communication between client and server
+- Auto-escalation to root (stealthy PE)
+- Load up dummy data of your choice upon execution (stealthy PE)
+- Key strings are encrypted and embedded in PE
+- Remote command execution module
+- Reverse shell module
+- AES-encrypted file transfer with AES module
+- Strain UUID tracking
+
 ## Use cases
 
 This project is versatile; with potential for use within CTFs, as well as real life testing situations, due to it's enhanced evasion abilities.
