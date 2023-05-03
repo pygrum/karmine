@@ -247,16 +247,20 @@ func logResponse(resp *models.KarResponseObjectCmd, cmd, name, uid, addr string)
 	if len(cmd) == 0 {
 		return
 	}
-	s := fmt.Sprintf("\n%s | %s\n", name, addr)
+	s := fmt.Sprintf("|| [%s] %s ||", name, strings.Replace(addr, ":", "@", -1))
 	brk := strings.Repeat("-", len(s))
-	fmt.Println("\n" + brk)
+	header := strings.Repeat("=", len(s))
+	fmt.Println("\n" + header)
 	fmt.Println(s)
-	log.WithField("status", "success").Info(cmd)
-	if len(resp.Data.Error) != 0 {
-		log.WithField("status", "error").Info(resp.Data.Error)
+	fmt.Println(header)
+	if resp.Code == 1 {
+		log.WithField("status", "error").Info(cmd)
+		fmt.Printf("%s", resp.Data.Error)
+		fmt.Println(brk)
 		return
 	}
-	fmt.Printf("\n%s\n", resp.Data.Result)
+	log.WithField("status", "success").Info(cmd)
+	fmt.Printf("%s", resp.Data.Result)
 	fmt.Println(brk)
 
 }

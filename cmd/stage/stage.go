@@ -29,7 +29,6 @@ var (
 	serveFile = file.Command("serve", "serve a specified file")
 	deleteF   = file.Command("clear", "remove a file from the stage")
 
-	encrypt  = serveFile.Flag("encrypt", "file will be written to disk encrypted, ideal if there is a packer on disk").Bool()
 	filename = serveFile.Arg("filename", "name of file to stage").Required().String()
 	outfile  = serveFile.Arg("outfile", "name of file to write to remote disk").Default("").String()
 
@@ -97,25 +96,11 @@ func handleServe(db *datastore.Kdb) {
 		log.Fatal(err)
 	}
 	var uuid string
-	if !*encrypt {
-		log.Warn("'encrypt' flag was not set, meaning file will be unencrypted on disk.")
-	}
-	if *encrypt && len(*forwho) == 0 {
-		log.Fatal("'for' flag must be provided in order to encrypt the file with the profile's aeskey")
-	}
 	if len(*forwho) != 0 {
 		// if not broadcast, encrypt the file object
 		uuid, err = datastore.GetUUIDByName(*forwho)
 		if err != nil {
 			log.Fatal(err)
-		}
-		// encrypt the file bytes if --encrypt is set
-		if *encrypt {
-			aeskey, X1, X2 := db.GetKeysByUUID(uuid)
-			bytes, err = kes.EncryptObject(bytes, aeskey, X1, X2)
-			if err != nil {
-				log.Fatal(err)
-			}
 		}
 	}
 	index := 0
