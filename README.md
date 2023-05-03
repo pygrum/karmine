@@ -21,7 +21,7 @@ current folder to the Windows Defender exclusion path, disables the cleaning of 
 - Key strings are encrypted and embedded in PE
 - Remote command execution module
 - Reverse shell module
-- AES-encrypted file transfer with AES module
+- AES-encrypted file transfer module
 - Strain UUID tracking
 
 ## Use cases
