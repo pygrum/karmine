@@ -7,7 +7,7 @@ Karmine is a C2 server written in Go. It handles requests from a bot/backdoor ('
 I built this as part of independent research into malware detection evasion techniques. Some of the simpler techniques are included in the beacon ('Karma') of this project:
 - Fileless execution: the final payload is embedded as an encrypted buffer into another program. It is then decrypted and injected into another process
 - DLL sideloading: the custom DLL included in this project leverages a DLL sideloading 'vulnerability' in the trusted file `bthudtask.exe`, which auto-elevates to Admin. The DLL subsequently adds the 
-current folder to the Windows Defender exclusion path, disables the cleaning of the temp folder, and creates a scheduled task for the payload to run each time the device restarts.
+current folder to the Windows Defender exclusion path, disables the cleaning of the temp folder, and creates a registry run key for each time the target user logs in.
 - As of release v0.1.0, there are no anti-analysis / sandboxing techniques built in.
 
 ## Features
